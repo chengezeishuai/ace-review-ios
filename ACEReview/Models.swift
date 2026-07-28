@@ -40,6 +40,7 @@ struct TaskItem: Identifiable, Decodable {
     let createdAt: String
     let reportURL: String?
     let pdfURL: String?
+    let pngURL: String?
     let rallyURL: String?
 
     enum CodingKeys: String, CodingKey {
@@ -51,6 +52,7 @@ struct TaskItem: Identifiable, Decodable {
         case createdAt = "created_at"
         case reportURL = "report_url"
         case pdfURL = "pdf_url"
+        case pngURL = "png_url"
         case rallyURL = "rally_url"
     }
 

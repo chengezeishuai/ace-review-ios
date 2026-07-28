@@ -22,6 +22,7 @@
 		A0000000000000000000010D /* NewReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000020D /* NewReviewView.swift */; };
 		A0000000000000000000010E /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000020E /* TaskListView.swift */; };
 		A0000000000000000000010F /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000020F /* ProfileView.swift */; };
+		A00000000000000000000111 /* AuthenticatedWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000213 /* AuthenticatedWebView.swift */; };
 		A00000000000000000000110 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000212 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -44,6 +45,7 @@
 		A00000000000000000000210 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A00000000000000000000211 /* ACE Review.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ACE Review.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000212 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A00000000000000000000213 /* AuthenticatedWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticatedWebView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +87,7 @@
 				A0000000000000000000020F /* ProfileView.swift */,
 				A00000000000000000000210 /* Info.plist */,
 				A00000000000000000000212 /* Assets.xcassets */,
+				A00000000000000000000213 /* AuthenticatedWebView.swift */,
 			);
 			path = ACEReview;
 			sourceTree = "<group>";
@@ -181,6 +184,7 @@
 				A0000000000000000000010D /* NewReviewView.swift in Sources */,
 				A0000000000000000000010E /* TaskListView.swift in Sources */,
 				A0000000000000000000010F /* ProfileView.swift in Sources */,
+				A00000000000000000000111 /* AuthenticatedWebView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

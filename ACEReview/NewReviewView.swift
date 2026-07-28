@@ -63,7 +63,7 @@ struct NewReviewView: View {
             Text("新建训练复盘")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .foregroundStyle(ACETheme.ink)
-            Text("选择视频后，读取与上传会同时进行。")
+            Text("选择视频后会边读取边上传；已生成的分片可在后台继续传输。")
                 .foregroundStyle(ACETheme.muted)
         }
         .padding(.top, 20)
@@ -229,7 +229,7 @@ private struct UploadStatusCard: View {
             if uploads.snapshot.phase == .uploading
                 || uploads.snapshot.phase == .finalizing {
                 Label(
-                    "可以切换其他 App 或锁屏，上传会在后台继续",
+                     "已生成的分片可以在后台继续上传；读取视频时请尽量保持 ACE 打开",
                     systemImage: "checkmark.shield.fill"
                 )
                 .font(.footnote)

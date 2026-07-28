@@ -334,7 +334,7 @@ final class UploadManager: NSObject, ObservableObject {
                         self.snapshot.phase = .uploading
                         self.snapshot.bytesRead = result.bytes
                         self.snapshot.totalBytes = result.bytes
-                        self.snapshot.message = "可以离开 ACE，系统会继续上传"
+                        self.snapshot.message = "视频已读取完成，剩余上传可在后台继续"
                     }
                     self.maybeScheduleFinalize()
                 } catch {

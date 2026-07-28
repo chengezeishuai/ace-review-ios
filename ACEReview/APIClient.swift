@@ -84,6 +84,21 @@ final class APIClient {
         )
     }
 
+    func reanalyzeTask(id: String, focus: String, label: String) async throws -> TaskEnvelope {
+        try await request(
+            "api/tasks/\(id)/reanalyze",
+            method: "POST",
+            body: ["focus": focus, "label": label]
+        )
+    }
+
+    func deleteTask(id: String) async throws {
+        let _: DeleteResponse = try await request(
+            "api/tasks/\(id)",
+            method: "DELETE"
+        )
+    }
+
     func createStreamingUpload(
         filename: String,
         mimeType: String,
@@ -120,4 +135,8 @@ final class APIClient {
         try FileManager.default.moveItem(at: temporaryURL, to: destination)
         return destination
     }
+}
+
+private struct DeleteResponse: Decodable {
+    let ok: Bool
 }
