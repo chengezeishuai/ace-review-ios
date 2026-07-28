@@ -117,7 +117,7 @@ final class UploadManager: NSObject, ObservableObject {
         configuration.isDiscretionary = false
         configuration.allowsCellularAccess = true
         configuration.waitsForConnectivity = true
-        configuration.httpMaximumConnectionsPerHost = 3
+        configuration.httpMaximumConnectionsPerHost = 4
         let session = URLSession(
             configuration: configuration,
             delegate: self,
