@@ -17,14 +17,16 @@ struct AuthenticatedWebView: UIViewRepresentable {
         let baseURL = AppSettings.shared.baseURL
         let target = APIClient.shared.url(for: path)
         var request = URLRequest(url: target)
-        if let token = KeychainStore.get("accessToken") {
+        if let token = KeychainStore.get("accessToken"),
+           let host = baseURL.host {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             if let cookie = HTTPCookie(properties: [
-                .originURL: baseURL,
+                .domain: host,
                 .path: "/",
                 .name: "ace_review_session",
                 .value: token,
-                .secure: baseURL.scheme == "https" ? "TRUE" : "FALSE"
+                .secure: baseURL.scheme == "https" ? "TRUE" : "FALSE",
+                .expires: Date().addingTimeInterval(30 * 24 * 60 * 60)
             ]) {
                 webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookie) {
                     webView.load(request)
