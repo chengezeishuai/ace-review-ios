@@ -168,7 +168,7 @@ final class UploadManager: NSObject, ObservableObject {
             self.snapshot = UploadSnapshot(
                 phase: .reading,
                 filename: filename,
-                message: "正在建立后台传输任务"
+                message: "已开始处理，正在准备视频"
             )
         }
 
@@ -232,6 +232,11 @@ final class UploadManager: NSObject, ObservableObject {
             self.snapshot.message = "已继续后台上传"
         }
         maybeScheduleFinalize()
+    }
+
+    func acknowledgeCompletion() {
+        guard !hasActiveUpload, snapshot.phase == .completed else { return }
+        snapshot = UploadSnapshot()
     }
 
     func restoreBackgroundTasks() {
@@ -532,7 +537,7 @@ final class UploadManager: NSObject, ObservableObject {
             self.hasActiveUpload = false
             self.lastError = ""
             self.snapshot.phase = .completed
-            self.snapshot.message = "视频已进入分析队列"
+            self.snapshot.message = "视频已提交，正在前往任务列表"
         }
         let content = UNMutableNotificationContent()
         content.title = "视频已提交"

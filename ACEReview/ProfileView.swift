@@ -2,8 +2,6 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject private var session: SessionStore
-    @StateObject private var settings = AppSettings.shared
-    @State private var showServer = false
     @State private var showLogout = false
 
     var body: some View {
@@ -44,22 +42,6 @@ struct ProfileView: View {
                     .aceCard()
 
                     VStack(spacing: 0) {
-                        Button {
-                            showServer.toggle()
-                        } label: {
-                            settingsRow("服务器设置", icon: "network")
-                        }
-                        if showServer {
-                            TextField("服务器地址", text: $settings.serverURLString)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .keyboardType(.URL)
-                                .padding(14)
-                                .background(Color.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .padding(.top, 12)
-                        }
-                        Divider().padding(.vertical, 14)
                         Button(role: .destructive) {
                             showLogout = true
                         } label: {
@@ -103,4 +85,3 @@ struct ProfileView: View {
         .contentShape(Rectangle())
     }
 }
-

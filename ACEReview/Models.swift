@@ -58,6 +58,13 @@ struct TaskItem: Identifiable, Decodable {
 
     var isComplete: Bool { status == "completed" }
     var isActive: Bool { ["uploading", "queued", "processing"].contains(status) }
+    var failureReason: String {
+        let message = clientMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if message.isEmpty || message == "分析未能完成，请稍后重试" {
+            return "分析过程遇到异常，可点击重新分析后继续"
+        }
+        return message
+    }
 }
 
 struct TaskEnvelope: Decodable {

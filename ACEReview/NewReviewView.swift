@@ -4,6 +4,7 @@ import UserNotifications
 
 struct NewReviewView: View {
     @ObservedObject var taskStore: TaskStore
+    let onUploadSubmitted: () -> Void
     @EnvironmentObject private var uploads: UploadManager
     @State private var selectedAsset: PHAsset?
     @State private var title = ""
@@ -50,7 +51,16 @@ struct NewReviewView: View {
         }
         .onChange(of: uploads.snapshot.phase) { _, phase in
             guard phase == .completed else { return }
-            Task { await taskStore.load() }
+            Task {
+                await taskStore.load()
+                try? await Task.sleep(for: .seconds(1.2))
+                title = ""
+                player = ""
+                notes = ""
+                selectedAsset = nil
+                thumbnail = nil
+                onUploadSubmitted()
+            }
         }
     }
 
@@ -146,11 +156,10 @@ struct NewReviewView: View {
                     notes: notes
                 )
             } label: {
-                HStack {
-                    Text("提交并开始分析")
-                    Spacer()
-                    Image(systemName: "arrow.up.circle.fill")
-                }
+                PrimaryActionLabel(
+                    title: "提交并开始分析",
+                    systemImage: "arrow.up.circle.fill"
+                )
             }
             .buttonStyle(PrimaryButtonStyle())
             .disabled(selectedAsset == nil)
@@ -221,8 +230,14 @@ private struct UploadStatusCard: View {
                 }
                 Spacer()
             }
-            ProgressView(value: progress)
-                .tint(ACETheme.lime)
+            HStack(spacing: 12) {
+                ProgressView(value: progress)
+                    .tint(ACETheme.lime)
+                Text("\(Int((progress * 100).rounded()))%")
+                    .font(.caption.monospacedDigit().bold())
+                    .foregroundStyle(ACETheme.lime)
+                    .frame(width: 42, alignment: .trailing)
+            }
             Text(uploads.snapshot.message)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
@@ -248,9 +263,28 @@ private struct UploadStatusCard: View {
     }
 
     private var progress: Double {
-        let total = uploads.snapshot.totalBytes
-        guard total > 0 else { return 0.08 }
-        return min(1, Double(uploads.snapshot.bytesUploaded) / Double(total))
+        switch uploads.snapshot.phase {
+        case .idle:
+            return 0
+        case .reading:
+            return 0.20
+        case .uploading:
+            let total = uploads.snapshot.totalBytes
+            guard total > 0 else { return 0.20 }
+            let actual = Double(uploads.snapshot.bytesUploaded) / Double(total)
+            return min(1, max(0.20, actual))
+        case .finalizing:
+            return 0.98
+        case .completed:
+            return 1
+        case .failed:
+            let total = uploads.snapshot.totalBytes
+            guard total > 0 else { return 0.20 }
+            return min(1, max(
+                0.20,
+                Double(uploads.snapshot.bytesUploaded) / Double(total)
+            ))
+        }
     }
 
     private var phaseIcon: String {

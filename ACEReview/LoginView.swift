@@ -53,12 +53,11 @@ struct LoginView: View {
                                 )
                             }
                         } label: {
-                            HStack {
-                                if session.isWorking { ProgressView().tint(.white) }
-                                Text(session.isWorking ? "正在登录" : "登录")
-                                Spacer()
-                                Image(systemName: "arrow.right")
-                            }
+                            PrimaryActionLabel(
+                                title: session.isWorking ? "正在登录" : "登录",
+                                systemImage: "arrow.right",
+                                isWorking: session.isWorking
+                            )
                         }
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(
@@ -97,4 +96,3 @@ struct LoginView: View {
         }
     }
 }
-

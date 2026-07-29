@@ -39,7 +39,11 @@ struct ChangePasswordView: View {
                             )
                         }
                     } label: {
-                        Text(session.isWorking ? "正在保存" : "保存新密码")
+                        PrimaryActionLabel(
+                            title: session.isWorking ? "正在保存" : "保存新密码",
+                            systemImage: "checkmark",
+                            isWorking: session.isWorking
+                        )
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(
@@ -56,4 +60,3 @@ struct ChangePasswordView: View {
         }
     }
 }
-

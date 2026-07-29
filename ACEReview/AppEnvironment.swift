@@ -10,26 +10,10 @@ enum ACETheme {
     static let muted = Color(red: 0.40, green: 0.44, blue: 0.41)
 }
 
-final class AppSettings: ObservableObject {
+final class AppSettings {
     static let shared = AppSettings()
-    private static let serverKey = "ace.serverURL"
-
-    @Published var serverURLString: String {
-        didSet { UserDefaults.standard.set(serverURLString, forKey: Self.serverKey) }
-    }
-
-    private init() {
-        serverURLString = UserDefaults.standard.string(forKey: Self.serverKey)
-            ?? "http://36.140.125.194:19999/"
-    }
-
-    var baseURL: URL {
-        let normalized = serverURLString.hasSuffix("/")
-            ? serverURLString
-            : serverURLString + "/"
-        return URL(string: normalized)
-            ?? URL(string: "http://36.140.125.194:19999/")!
-    }
+    let baseURL = URL(string: "http://36.140.125.194:19999/")!
+    private init() {}
 }
 
 struct PrimaryButtonStyle: ButtonStyle {
@@ -38,9 +22,38 @@ struct PrimaryButtonStyle: ButtonStyle {
             .font(.system(size: 16, weight: .bold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
+            .frame(minHeight: 24)
             .padding(.vertical, 16)
             .background(ACETheme.green.opacity(configuration.isPressed ? 0.82 : 1))
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+struct PrimaryActionLabel: View {
+    let title: String
+    var systemImage: String?
+    var isWorking = false
+
+    var body: some View {
+        ZStack {
+            HStack(spacing: 8) {
+                if isWorking {
+                    ProgressView()
+                        .tint(.white)
+                }
+                Text(title)
+                    .multilineTextAlignment(.center)
+            }
+            if let systemImage, !isWorking {
+                HStack {
+                    Spacer()
+                    Image(systemName: systemImage)
+                        .font(.system(size: 18, weight: .bold))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -56,4 +69,3 @@ extension View {
             }
     }
 }
-

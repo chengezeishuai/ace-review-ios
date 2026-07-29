@@ -196,9 +196,19 @@ private struct TaskCard: View {
                 }
                 .disabled(isWorking)
             } else if task.status == "failed" {
-                Text(task.clientMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("未能完成分析")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(ACETheme.ink)
+                        Text(task.failureReason)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 Button(action: retry) {
                     actionLabel(isWorking ? "正在重新排队" : "重新分析", icon: "arrow.clockwise")
                 }
