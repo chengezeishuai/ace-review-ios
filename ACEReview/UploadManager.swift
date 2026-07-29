@@ -327,7 +327,7 @@ final class UploadManager: NSObject, ObservableObject {
                       self.hasActiveUpload,
                       self.snapshot.phase != .failed else {
                     timer.invalidate()
-                    self.preparationTimer = nil
+                    self?.preparationTimer = nil
                     return
                 }
                 let elapsed = Date().timeIntervalSince(startedAt)
