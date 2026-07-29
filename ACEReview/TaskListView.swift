@@ -168,7 +168,7 @@ private struct TaskCard: View {
                         .font(.headline)
                         .foregroundStyle(ACETheme.ink)
                         .lineLimit(2)
-                    Text(task.player?.isEmpty == false ? task.player! : task.originalName)
+                    Text(task.player?.isEmpty == false ? task.player! : "原文件：\(task.originalName)")
                         .font(.caption)
                         .foregroundStyle(ACETheme.muted)
                         .lineLimit(1)
