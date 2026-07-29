@@ -36,21 +36,16 @@ struct PrimaryActionLabel: View {
     var isWorking = false
 
     var body: some View {
-        ZStack {
-            HStack(spacing: 8) {
-                if isWorking {
-                    ProgressView()
-                        .tint(.white)
-                }
-                Text(title)
-                    .multilineTextAlignment(.center)
+        HStack(spacing: 9) {
+            if isWorking {
+                ProgressView()
+                    .tint(.white)
             }
+            Text(title)
+                .multilineTextAlignment(.center)
             if let systemImage, !isWorking {
-                HStack {
-                    Spacer()
-                    Image(systemName: systemImage)
-                        .font(.system(size: 18, weight: .bold))
-                }
+                Image(systemName: systemImage)
+                    .font(.system(size: 17, weight: .bold))
             }
         }
         .frame(maxWidth: .infinity)

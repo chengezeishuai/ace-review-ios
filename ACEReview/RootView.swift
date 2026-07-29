@@ -26,9 +26,8 @@ private struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                NewReviewView(taskStore: taskStore) {
+                NewReviewView {
                     selectedTab = 1
-                    uploads.acknowledgeCompletion()
                 }
             }
             .tabItem { Label("新建复盘", systemImage: "plus.circle.fill") }
@@ -48,5 +47,16 @@ private struct MainTabView: View {
         }
         .tint(ACETheme.green)
         .task { await taskStore.load() }
+        .onAppear {
+            if uploads.hasActiveUpload {
+                selectedTab = 1
+            }
+        }
+        .onChange(of: uploads.snapshot.phase) { _, phase in
+            guard phase == .completed else { return }
+            selectedTab = 1
+            uploads.acknowledgeCompletion()
+            Task { await taskStore.load() }
+        }
     }
 }

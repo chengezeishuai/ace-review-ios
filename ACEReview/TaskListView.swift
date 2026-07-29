@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TaskListView: View {
     @ObservedObject var taskStore: TaskStore
+    @EnvironmentObject private var uploads: UploadManager
     @State private var preview: PreviewFile?
     @State private var webPage: WebPage?
     @State private var reportError = ""
@@ -68,6 +69,10 @@ struct TaskListView: View {
                 await taskStore.load()
                 try? await Task.sleep(for: .seconds(8))
             }
+        }
+        .onChange(of: uploads.activeTaskID) { _, taskID in
+            guard taskID != nil else { return }
+            Task { await taskStore.load() }
         }
     }
 
@@ -144,6 +149,7 @@ struct TaskListView: View {
 }
 
 private struct TaskCard: View {
+    @EnvironmentObject private var uploads: UploadManager
     let task: TaskItem
     let isWorking: Bool
     let openPDF: () -> Void
@@ -180,14 +186,23 @@ private struct TaskCard: View {
             if task.isActive {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text(task.clientMessage)
+                        Text(activeMessage)
                         Spacer()
-                        Text("\(task.progress)%")
+                        if let activeProgress {
+                            Text("\(activeProgress)%")
+                                .monospacedDigit()
+                        }
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(ACETheme.green)
-                    ProgressView(value: Double(task.progress), total: 100)
-                        .tint(ACETheme.green)
+                    if let activeProgress {
+                        ProgressView(value: Double(activeProgress), total: 100)
+                            .tint(ACETheme.green)
+                    } else {
+                        ProgressView()
+                            .progressViewStyle(.linear)
+                            .tint(ACETheme.green)
+                    }
                 }
             } else if task.isComplete {
                 reportButtons
@@ -274,6 +289,38 @@ private struct TaskCard: View {
         case "uploading": "上传中"
         case "queued": "排队中"
         default: "分析中"
+        }
+    }
+
+    private var localSnapshot: UploadSnapshot? {
+        uploads.activeTaskID == task.id ? uploads.snapshot : nil
+    }
+
+    private var activeMessage: String {
+        localSnapshot?.message ?? task.clientMessage
+    }
+
+    private var activeProgress: Int? {
+        guard let localSnapshot else {
+            return task.progress > 0 ? task.progress : nil
+        }
+        switch localSnapshot.phase {
+        case .reading, .idle:
+            return nil
+        case .uploading:
+            guard localSnapshot.totalBytes > 0 else { return nil }
+            let ratio = Double(localSnapshot.bytesUploaded)
+                / Double(localSnapshot.totalBytes)
+            return min(100, max(0, Int((ratio * 100).rounded())))
+        case .finalizing:
+            return 99
+        case .completed:
+            return 100
+        case .failed:
+            guard localSnapshot.totalBytes > 0 else { return nil }
+            let ratio = Double(localSnapshot.bytesUploaded)
+                / Double(localSnapshot.totalBytes)
+            return min(100, max(0, Int((ratio * 100).rounded())))
         }
     }
 }

@@ -3,8 +3,7 @@ import SwiftUI
 import UserNotifications
 
 struct NewReviewView: View {
-    @ObservedObject var taskStore: TaskStore
-    let onUploadSubmitted: () -> Void
+    let onShowTasks: () -> Void
     @EnvironmentObject private var uploads: UploadManager
     @State private var selectedAsset: PHAsset?
     @State private var title = ""
@@ -21,7 +20,7 @@ struct NewReviewView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     header
                     if uploads.hasActiveUpload || uploads.snapshot.phase == .completed {
-                        UploadStatusCard()
+                        ActiveUploadEntryCard(onShowTasks: onShowTasks)
                     } else {
                         videoCard
                         detailsCard
@@ -48,19 +47,6 @@ struct NewReviewView: View {
         .task {
             try? await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .sound, .badge])
-        }
-        .onChange(of: uploads.snapshot.phase) { _, phase in
-            guard phase == .completed else { return }
-            Task {
-                await taskStore.load()
-                try? await Task.sleep(for: .seconds(1.2))
-                title = ""
-                player = ""
-                notes = ""
-                selectedAsset = nil
-                thumbnail = nil
-                onUploadSubmitted()
-            }
         }
     }
 
@@ -155,6 +141,12 @@ struct NewReviewView: View {
                     player: player,
                     notes: notes
                 )
+                title = ""
+                player = ""
+                notes = ""
+                self.selectedAsset = nil
+                thumbnail = nil
+                onShowTasks()
             } label: {
                 PrimaryActionLabel(
                     title: "提交并开始分析",
@@ -208,20 +200,21 @@ struct NewReviewView: View {
     }
 }
 
-private struct UploadStatusCard: View {
+private struct ActiveUploadEntryCard: View {
     @EnvironmentObject private var uploads: UploadManager
+    let onShowTasks: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top) {
+        VStack(alignment: .leading, spacing: 17) {
+            HStack(alignment: .center, spacing: 14) {
                 ZStack {
                     Circle().fill(ACETheme.lime)
-                    Image(systemName: phaseIcon)
+                    Image(systemName: "arrow.up")
                         .foregroundStyle(ACETheme.ink)
                 }
                 .frame(width: 46, height: 46)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(uploads.snapshot.phase.rawValue)
+                    Text("当前任务正在处理")
                         .font(.headline)
                     Text(uploads.snapshot.filename)
                         .font(.subheadline)
@@ -230,26 +223,17 @@ private struct UploadStatusCard: View {
                 }
                 Spacer()
             }
-            HStack(spacing: 12) {
-                ProgressView(value: progress)
-                    .tint(ACETheme.lime)
-                Text("\(Int((progress * 100).rounded()))%")
-                    .font(.caption.monospacedDigit().bold())
-                    .foregroundStyle(ACETheme.lime)
-                    .frame(width: 42, alignment: .trailing)
-            }
             Text(uploads.snapshot.message)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
-            if uploads.snapshot.phase == .uploading
-                || uploads.snapshot.phase == .finalizing {
-                Label(
-                     "已生成的分片可以在后台继续上传；读取视频时请尽量保持 ACE 打开",
-                    systemImage: "checkmark.shield.fill"
+            Button(action: onShowTasks) {
+                PrimaryActionLabel(
+                    title: "查看当前任务",
+                    systemImage: "rectangle.stack.fill"
                 )
-                .font(.footnote)
-                .foregroundStyle(ACETheme.lime)
             }
+            .buttonStyle(PrimaryButtonStyle())
+            .tint(ACETheme.green)
             if uploads.snapshot.phase == .failed {
                 Button("继续提交") { uploads.retryFailedParts() }
                     .foregroundStyle(ACETheme.lime)
@@ -260,41 +244,5 @@ private struct UploadStatusCard: View {
         .foregroundStyle(.white)
         .background(ACETheme.ink)
         .clipShape(RoundedRectangle(cornerRadius: 24))
-    }
-
-    private var progress: Double {
-        switch uploads.snapshot.phase {
-        case .idle:
-            return 0
-        case .reading:
-            return 0.20
-        case .uploading:
-            let total = uploads.snapshot.totalBytes
-            guard total > 0 else { return 0.20 }
-            let actual = Double(uploads.snapshot.bytesUploaded) / Double(total)
-            return min(1, max(0.20, actual))
-        case .finalizing:
-            return 0.98
-        case .completed:
-            return 1
-        case .failed:
-            let total = uploads.snapshot.totalBytes
-            guard total > 0 else { return 0.20 }
-            return min(1, max(
-                0.20,
-                Double(uploads.snapshot.bytesUploaded) / Double(total)
-            ))
-        }
-    }
-
-    private var phaseIcon: String {
-        switch uploads.snapshot.phase {
-        case .reading: "arrow.down.doc.fill"
-        case .uploading: "arrow.up"
-        case .finalizing: "sparkles"
-        case .completed: "checkmark"
-        case .failed: "exclamationmark"
-        case .idle: "video"
-        }
     }
 }

@@ -92,6 +92,7 @@ final class UploadManager: NSObject, ObservableObject {
 
     @Published private(set) var snapshot = UploadSnapshot()
     @Published private(set) var hasActiveUpload = false
+    @Published private(set) var activeTaskID: String?
     @Published var lastError = ""
 
     var backgroundEventsCompletionHandler: (() -> Void)?
@@ -132,13 +133,16 @@ final class UploadManager: NSObject, ObservableObject {
         manifest = loadManifest()
         if let manifest {
             hasActiveUpload = true
+            activeTaskID = manifest.taskID
             snapshot = UploadSnapshot(
                 phase: manifest.importFinished ? .uploading : .reading,
                 filename: manifest.filename,
                 bytesRead: manifest.totalBytes,
                 bytesUploaded: 0,
                 totalBytes: manifest.importFinished ? manifest.totalBytes : 0,
-                message: "系统会在后台继续处理"
+                message: manifest.importFinished
+                    ? "视频正在通过加密安全通道上传，可在后台继续"
+                    : "正在通过加密安全通道接收您发送的视频，随后将立即上传并开始分析"
             )
         }
         _ = backgroundSession
@@ -168,7 +172,7 @@ final class UploadManager: NSObject, ObservableObject {
             self.snapshot = UploadSnapshot(
                 phase: .reading,
                 filename: filename,
-                message: "已开始处理，正在准备视频"
+                message: "正在通过加密安全通道接收您发送的视频，随后将立即上传并开始分析"
             )
         }
 
@@ -199,6 +203,9 @@ final class UploadManager: NSObject, ObservableObject {
                 self.manifest = newManifest
                 self.persistManifestUnlocked()
                 self.lock.unlock()
+                self.publish {
+                    self.activeTaskID = response.task.id
+                }
                 self.startReading(
                     asset: asset,
                     resource: resource,
@@ -298,11 +305,9 @@ final class UploadManager: NSObject, ObservableObject {
         beginImportBackgroundTime()
         let options = PHAssetResourceRequestOptions()
         options.isNetworkAccessAllowed = true
-        options.progressHandler = { [weak self] progress in
+        options.progressHandler = { [weak self] _ in
             self?.publish {
-                self?.snapshot.message = progress > 0
-                    ? "正在读取视频 \(Int(progress * 100))%"
-                    : "正在读取视频"
+                self?.snapshot.message = "正在通过加密安全通道接收您发送的视频，随后将立即上传并开始分析"
             }
         }
         var readFailure: Error?
@@ -314,7 +319,11 @@ final class UploadManager: NSObject, ObservableObject {
                     try accumulator.append(data)
                     self?.publish {
                         self?.snapshot.bytesRead = accumulator.totalAccepted
-                        self?.snapshot.message = "读取与上传正在同时进行"
+                        if self?.snapshot.phase == .reading {
+                            self?.snapshot.message = "正在通过加密安全通道接收您发送的视频，随后将立即上传并开始分析"
+                        } else {
+                            self?.snapshot.message = "视频正在通过加密安全通道上传，可在后台继续"
+                        }
                     }
                 } catch {
                     readFailure = error
@@ -339,7 +348,7 @@ final class UploadManager: NSObject, ObservableObject {
                         self.snapshot.phase = .uploading
                         self.snapshot.bytesRead = result.bytes
                         self.snapshot.totalBytes = result.bytes
-                        self.snapshot.message = "视频已读取完成，剩余上传可在后台继续"
+                        self.snapshot.message = "视频正在通过加密安全通道上传，可在后台继续"
                     }
                     self.maybeScheduleFinalize()
                 } catch {
@@ -438,7 +447,7 @@ final class UploadManager: NSObject, ObservableObject {
             task.taskDescription = "finalize|\(manifest.taskID)|-1|\(bodyURL.path)"
             publish {
                 self.snapshot.phase = .finalizing
-                self.snapshot.message = "正在提交分析任务"
+                self.snapshot.message = "视频上传完成，正在提交分析任务"
             }
             task.resume()
         } catch {
@@ -535,6 +544,7 @@ final class UploadManager: NSObject, ObservableObject {
         lock.unlock()
         publish {
             self.hasActiveUpload = false
+            self.activeTaskID = nil
             self.lastError = ""
             self.snapshot.phase = .completed
             self.snapshot.message = "视频已提交，正在前往任务列表"
@@ -575,7 +585,7 @@ extension UploadManager: URLSessionTaskDelegate, URLSessionDataDelegate {
         guard task.taskDescription?.hasPrefix("part|") == true else { return }
         publish {
             self.snapshot.phase = .uploading
-            self.snapshot.message = "可以离开 ACE，系统会继续上传"
+            self.snapshot.message = "视频正在通过加密安全通道上传，可在后台继续"
         }
     }
 
