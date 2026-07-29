@@ -20,7 +20,7 @@ struct AuthenticatedWebView: UIViewRepresentable {
         if let token = KeychainStore.get("accessToken") {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             if let cookie = HTTPCookie(properties: [
-                .domain: baseURL.host ?? "",
+                .originURL: baseURL,
                 .path: "/",
                 .name: "ace_review_session",
                 .value: token,

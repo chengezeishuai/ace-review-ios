@@ -191,6 +191,13 @@ private struct TaskCard: View {
                         if let activeProgress {
                             Text("\(activeProgress)%")
                                 .monospacedDigit()
+                                .contentTransition(
+                                    .numericText(value: Double(activeProgress))
+                                )
+                                .animation(
+                                    .linear(duration: 0.08),
+                                    value: activeProgress
+                                )
                         }
                     }
                     .font(.caption.weight(.semibold))
@@ -198,6 +205,10 @@ private struct TaskCard: View {
                     if let activeProgress {
                         ProgressView(value: Double(activeProgress), total: 100)
                             .tint(ACETheme.green)
+                            .animation(
+                                .linear(duration: 0.08),
+                                value: activeProgress
+                            )
                     } else {
                         ProgressView()
                             .progressViewStyle(.linear)
@@ -207,7 +218,7 @@ private struct TaskCard: View {
             } else if task.isComplete {
                 reportButtons
                 Button(action: reanalyze) {
-                    actionLabel("专项复盘", icon: "scope")
+                    actionLabel("按重点重新分析", icon: "scope")
                 }
                 .disabled(isWorking)
             } else if task.status == "failed" {
@@ -317,18 +328,9 @@ private struct TaskCard: View {
         case .idle:
             return nil
         case .uploading:
-            guard localSnapshot.totalBytes > 0 else {
-                return max(1, localSnapshot.preparationPercent)
-            }
-            let ratio = Double(localSnapshot.bytesUploaded)
-                / Double(localSnapshot.totalBytes)
-            let actual = Int((ratio * 100).rounded())
-            return min(
-                100,
-                max(localSnapshot.preparationPercent, actual)
-            )
+            return min(98, max(1, localSnapshot.preparationPercent))
         case .finalizing:
-            return 99
+            return min(99, max(1, localSnapshot.preparationPercent))
         case .completed:
             return 100
         case .failed:
@@ -349,19 +351,22 @@ private struct ReanalyzeSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("专项复盘") {
+                Section("分析重点") {
+                    Text("复用这条任务的原视频，按你填写的重点重新生成一份分析报告，不需要再次上传视频。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     TextField("本次重点，例如：正手击球稳定性", text: $focus, axis: .vertical)
                     TextField("名称（选填）", text: $label)
                 }
                 Section {
-                    Button("提交专项复盘") {
+                    Button("创建新分析") {
                         submit(focus, label)
                         dismiss()
                     }
                     .disabled(focus.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .navigationTitle("专项复盘")
+            .navigationTitle("按重点重新分析")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

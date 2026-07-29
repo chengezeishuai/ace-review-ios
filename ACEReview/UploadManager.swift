@@ -105,7 +105,8 @@ final class UploadManager: NSObject, ObservableObject {
     private var preparationTimer: Timer?
     private var preparationStartedAt: Date?
 
-    private static let minimumPreparationDisplay: TimeInterval = 10
+    private static let minimumPreparationDisplay: TimeInterval = 5
+    private static let progressTick: TimeInterval = 0.05
     private static let preparationMessage =
         "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
     private static let uploadMessage =
@@ -153,9 +154,15 @@ final class UploadManager: NSObject, ObservableObject {
             let preparationElapsed = Date().timeIntervalSince(manifest.createdAt)
             let showPreparation = !manifest.importFinished
                 || preparationElapsed < Self.minimumPreparationDisplay
-            let restoredPreparationPercent = Self.preparationPercent(
-                since: manifest.createdAt
-            )
+            let actualPercent = manifest.totalBytes > 0
+                ? Int(
+                    Double(restoredUploadedBytes)
+                        / Double(manifest.totalBytes) * 100
+                )
+                : 0
+            let restoredPreparationPercent = showPreparation
+                ? Self.preparationPercent(since: manifest.createdAt)
+                : max(15, actualPercent)
             preparationStartedAt = manifest.createdAt
             hasActiveUpload = true
             activeTaskID = manifest.taskID
@@ -173,7 +180,7 @@ final class UploadManager: NSObject, ObservableObject {
             )
         }
         _ = backgroundSession
-        if let manifest, snapshot.isShowingPreparation {
+        if let manifest {
             startPreparationProgress(startedAt: manifest.createdAt)
         }
         restoreBackgroundTasks()
@@ -283,8 +290,26 @@ final class UploadManager: NSObject, ObservableObject {
 
     private static func preparationPercent(since startedAt: Date) -> Int {
         let elapsed = max(0, Date().timeIntervalSince(startedAt))
-        let eased = 1 + Int(14 * (1 - exp(-elapsed / 75)))
-        return min(15, max(1, eased))
+        let ratio = min(1, elapsed / minimumPreparationDisplay)
+        return min(15, max(1, 1 + Int((14 * ratio).rounded(.down))))
+    }
+
+    private func realProgressTarget() -> Int {
+        switch snapshot.phase {
+        case .uploading:
+            guard snapshot.totalBytes > 0 else {
+                return snapshot.preparationPercent
+            }
+            let ratio = Double(snapshot.bytesUploaded)
+                / Double(snapshot.totalBytes)
+            return min(98, max(0, Int((ratio * 100).rounded())))
+        case .finalizing:
+            return 99
+        case .completed:
+            return 100
+        default:
+            return snapshot.preparationPercent
+        }
     }
 
     private func startPreparationProgress(startedAt: Date) {
@@ -294,30 +319,38 @@ final class UploadManager: NSObject, ObservableObject {
                 self.snapshot.preparationPercent,
                 Self.preparationPercent(since: startedAt)
             )
-            self.preparationTimer = Timer.scheduledTimer(
-                withTimeInterval: 2,
+            let timer = Timer(
+                timeInterval: Self.progressTick,
                 repeats: true
             ) { [weak self] timer in
                 guard let self,
                       self.hasActiveUpload,
-                      self.snapshot.isShowingPreparation,
                       self.snapshot.phase != .failed else {
                     timer.invalidate()
+                    self.preparationTimer = nil
                     return
                 }
-                self.snapshot.preparationPercent = max(
-                    self.snapshot.preparationPercent,
-                    Self.preparationPercent(since: startedAt)
-                )
                 let elapsed = Date().timeIntervalSince(startedAt)
-                if self.snapshot.totalBytes > 0,
-                   elapsed >= Self.minimumPreparationDisplay {
-                    self.snapshot.isShowingPreparation = false
-                    self.snapshot.message = Self.uploadMessage
-                    timer.invalidate()
-                    self.preparationTimer = nil
+                if self.snapshot.isShowingPreparation {
+                    self.snapshot.preparationPercent = max(
+                        self.snapshot.preparationPercent,
+                        Self.preparationPercent(since: startedAt)
+                    )
+                    if self.snapshot.totalBytes > 0,
+                       elapsed >= Self.minimumPreparationDisplay {
+                        self.snapshot.isShowingPreparation = false
+                        self.snapshot.message = Self.uploadMessage
+                    }
+                }
+                if !self.snapshot.isShowingPreparation {
+                    let target = self.realProgressTarget()
+                    if target > self.snapshot.preparationPercent {
+                        self.snapshot.preparationPercent += 1
+                    }
                 }
             }
+            self.preparationTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
         }
     }
 
@@ -445,7 +478,6 @@ final class UploadManager: NSObject, ObservableObject {
                         if elapsed >= Self.minimumPreparationDisplay {
                             self.snapshot.isShowingPreparation = false
                             self.snapshot.message = Self.uploadMessage
-                            self.stopPreparationProgress()
                         } else {
                             self.snapshot.message = Self.preparationMessage
                         }
