@@ -297,12 +297,19 @@ private struct TaskCard: View {
     }
 
     private var activeMessage: String {
-        localSnapshot?.message ?? task.clientMessage
+        guard let localSnapshot else { return task.clientMessage }
+        if localSnapshot.isShowingPreparation {
+            return "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
+        }
+        return localSnapshot.message
     }
 
     private var activeProgress: Int? {
         guard let localSnapshot else {
             return task.progress > 0 ? task.progress : nil
+        }
+        if localSnapshot.isShowingPreparation {
+            return max(1, localSnapshot.preparationPercent)
         }
         switch localSnapshot.phase {
         case .reading:

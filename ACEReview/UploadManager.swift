@@ -103,6 +103,13 @@ final class UploadManager: NSObject, ObservableObject {
     private var importBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var sessionReady = false
     private var preparationTimer: Timer?
+    private var preparationStartedAt: Date?
+
+    private static let minimumPreparationDisplay: TimeInterval = 10
+    private static let preparationMessage =
+        "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
+    private static let uploadMessage =
+        "视频正在通过加密安全通道上传，可在后台继续"
 
     private lazy var delegateQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -143,9 +150,13 @@ final class UploadManager: NSObject, ObservableObject {
             } else {
                 restoredUploadedBytes = 0
             }
-            let restoredPreparationPercent = manifest.importFinished
-                ? 15
-                : Self.preparationPercent(since: manifest.createdAt)
+            let preparationElapsed = Date().timeIntervalSince(manifest.createdAt)
+            let showPreparation = !manifest.importFinished
+                || preparationElapsed < Self.minimumPreparationDisplay
+            let restoredPreparationPercent = Self.preparationPercent(
+                since: manifest.createdAt
+            )
+            preparationStartedAt = manifest.createdAt
             hasActiveUpload = true
             activeTaskID = manifest.taskID
             snapshot = UploadSnapshot(
@@ -155,13 +166,14 @@ final class UploadManager: NSObject, ObservableObject {
                 bytesUploaded: restoredUploadedBytes,
                 totalBytes: manifest.importFinished ? manifest.totalBytes : 0,
                 preparationPercent: restoredPreparationPercent,
-                message: manifest.importFinished
-                    ? "视频正在通过加密安全通道上传，可在后台继续"
-                    : "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
+                isShowingPreparation: showPreparation,
+                message: showPreparation
+                    ? Self.preparationMessage
+                    : Self.uploadMessage
             )
         }
         _ = backgroundSession
-        if let manifest, !manifest.importFinished {
+        if let manifest, snapshot.isShowingPreparation {
             startPreparationProgress(startedAt: manifest.createdAt)
         }
         restoreBackgroundTasks()
@@ -186,13 +198,15 @@ final class UploadManager: NSObject, ObservableObject {
         let mime = UTType(resource.uniformTypeIdentifier)?.preferredMIMEType
             ?? "video/quicktime"
         let preparationStart = Date()
+        preparationStartedAt = preparationStart
         publish {
             self.hasActiveUpload = true
             self.snapshot = UploadSnapshot(
                 phase: .reading,
                 filename: filename,
                 preparationPercent: 1,
-                message: "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
+                isShowingPreparation: true,
+                message: Self.preparationMessage
             )
         }
         startPreparationProgress(startedAt: preparationStart)
@@ -286,7 +300,7 @@ final class UploadManager: NSObject, ObservableObject {
             ) { [weak self] timer in
                 guard let self,
                       self.hasActiveUpload,
-                      self.snapshot.totalBytes == 0,
+                      self.snapshot.isShowingPreparation,
                       self.snapshot.phase != .failed else {
                     timer.invalidate()
                     return
@@ -295,6 +309,14 @@ final class UploadManager: NSObject, ObservableObject {
                     self.snapshot.preparationPercent,
                     Self.preparationPercent(since: startedAt)
                 )
+                let elapsed = Date().timeIntervalSince(startedAt)
+                if self.snapshot.totalBytes > 0,
+                   elapsed >= Self.minimumPreparationDisplay {
+                    self.snapshot.isShowingPreparation = false
+                    self.snapshot.message = Self.uploadMessage
+                    timer.invalidate()
+                    self.preparationTimer = nil
+                }
             }
         }
     }
@@ -303,6 +325,8 @@ final class UploadManager: NSObject, ObservableObject {
         DispatchQueue.main.async {
             self.preparationTimer?.invalidate()
             self.preparationTimer = nil
+            self.preparationStartedAt = nil
+            self.snapshot.isShowingPreparation = false
         }
     }
 
@@ -368,13 +392,15 @@ final class UploadManager: NSObject, ObservableObject {
         options.progressHandler = { [weak self] progress in
             self?.publish {
                 guard let self else { return }
+                _ = progress
+                let startedAt = self.preparationStartedAt ?? Date()
                 self.snapshot.preparationPercent = max(
                     self.snapshot.preparationPercent,
-                    min(15, max(1, Int((progress * 15).rounded())))
+                    Self.preparationPercent(since: startedAt)
                 )
-                self.snapshot.message = self.snapshot.phase == .reading
-                    ? "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
-                    : "视频正在通过加密安全通道上传，可在后台继续"
+                self.snapshot.message = self.snapshot.isShowingPreparation
+                    ? Self.preparationMessage
+                    : Self.uploadMessage
             }
         }
         var readFailure: Error?
@@ -386,11 +412,10 @@ final class UploadManager: NSObject, ObservableObject {
                     try accumulator.append(data)
                     self?.publish {
                         self?.snapshot.bytesRead = accumulator.totalAccepted
-                        if self?.snapshot.phase == .reading {
-                            self?.snapshot.message = "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
-                        } else {
-                            self?.snapshot.message = "视频正在通过加密安全通道上传，可在后台继续"
-                        }
+                        self?.snapshot.message =
+                            self?.snapshot.isShowingPreparation == true
+                            ? Self.preparationMessage
+                            : Self.uploadMessage
                     }
                 } catch {
                     readFailure = error
@@ -411,16 +436,19 @@ final class UploadManager: NSObject, ObservableObject {
                     self.manifest?.importFinished = true
                     self.persistManifestUnlocked()
                     self.lock.unlock()
-                    self.stopPreparationProgress()
                     self.publish {
                         self.snapshot.phase = .uploading
                         self.snapshot.bytesRead = result.bytes
                         self.snapshot.totalBytes = result.bytes
-                        self.snapshot.preparationPercent = max(
-                            15,
-                            self.snapshot.preparationPercent
-                        )
-                        self.snapshot.message = "视频正在通过加密安全通道上传，可在后台继续"
+                        let startedAt = self.preparationStartedAt ?? Date()
+                        let elapsed = Date().timeIntervalSince(startedAt)
+                        if elapsed >= Self.minimumPreparationDisplay {
+                            self.snapshot.isShowingPreparation = false
+                            self.snapshot.message = Self.uploadMessage
+                            self.stopPreparationProgress()
+                        } else {
+                            self.snapshot.message = Self.preparationMessage
+                        }
                     }
                     self.maybeScheduleFinalize()
                 } catch {
@@ -659,7 +687,9 @@ extension UploadManager: URLSessionTaskDelegate, URLSessionDataDelegate {
         guard task.taskDescription?.hasPrefix("part|") == true else { return }
         publish {
             self.snapshot.phase = .uploading
-            self.snapshot.message = "视频正在通过加密安全通道上传，可在后台继续"
+            self.snapshot.message = self.snapshot.isShowingPreparation
+                ? Self.preparationMessage
+                : Self.uploadMessage
         }
     }
 
