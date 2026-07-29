@@ -305,13 +305,21 @@ private struct TaskCard: View {
             return task.progress > 0 ? task.progress : nil
         }
         switch localSnapshot.phase {
-        case .reading, .idle:
+        case .reading:
+            return max(1, localSnapshot.preparationPercent)
+        case .idle:
             return nil
         case .uploading:
-            guard localSnapshot.totalBytes > 0 else { return nil }
+            guard localSnapshot.totalBytes > 0 else {
+                return max(1, localSnapshot.preparationPercent)
+            }
             let ratio = Double(localSnapshot.bytesUploaded)
                 / Double(localSnapshot.totalBytes)
-            return min(100, max(0, Int((ratio * 100).rounded())))
+            let actual = Int((ratio * 100).rounded())
+            return min(
+                100,
+                max(localSnapshot.preparationPercent, actual)
+            )
         case .finalizing:
             return 99
         case .completed:

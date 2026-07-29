@@ -102,6 +102,7 @@ final class UploadManager: NSObject, ObservableObject {
     private var resourceRequestID: PHAssetResourceDataRequestID?
     private var importBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     private var sessionReady = false
+    private var preparationTimer: Timer?
 
     private lazy var delegateQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -142,6 +143,9 @@ final class UploadManager: NSObject, ObservableObject {
             } else {
                 restoredUploadedBytes = 0
             }
+            let restoredPreparationPercent = manifest.importFinished
+                ? 15
+                : Self.preparationPercent(since: manifest.createdAt)
             hasActiveUpload = true
             activeTaskID = manifest.taskID
             snapshot = UploadSnapshot(
@@ -150,12 +154,16 @@ final class UploadManager: NSObject, ObservableObject {
                 bytesRead: manifest.totalBytes,
                 bytesUploaded: restoredUploadedBytes,
                 totalBytes: manifest.importFinished ? manifest.totalBytes : 0,
+                preparationPercent: restoredPreparationPercent,
                 message: manifest.importFinished
                     ? "视频正在通过加密安全通道上传，可在后台继续"
-                    : "正在通过加密安全通道接收您发送的视频，随后将立即上传并开始分析"
+                    : "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
             )
         }
         _ = backgroundSession
+        if let manifest, !manifest.importFinished {
+            startPreparationProgress(startedAt: manifest.createdAt)
+        }
         restoreBackgroundTasks()
     }
 
@@ -177,14 +185,17 @@ final class UploadManager: NSObject, ObservableObject {
         let filename = normalizedFilename(resource.originalFilename)
         let mime = UTType(resource.uniformTypeIdentifier)?.preferredMIMEType
             ?? "video/quicktime"
+        let preparationStart = Date()
         publish {
             self.hasActiveUpload = true
             self.snapshot = UploadSnapshot(
                 phase: .reading,
                 filename: filename,
-                message: "正在通过加密安全通道接收您发送的视频，随后将立即上传并开始分析"
+                preparationPercent: 1,
+                message: "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
             )
         }
+        startPreparationProgress(startedAt: preparationStart)
 
         Task {
             do {
@@ -256,6 +267,45 @@ final class UploadManager: NSObject, ObservableObject {
         snapshot = UploadSnapshot()
     }
 
+    private static func preparationPercent(since startedAt: Date) -> Int {
+        let elapsed = max(0, Date().timeIntervalSince(startedAt))
+        let eased = 1 + Int(14 * (1 - exp(-elapsed / 75)))
+        return min(15, max(1, eased))
+    }
+
+    private func startPreparationProgress(startedAt: Date) {
+        DispatchQueue.main.async {
+            self.preparationTimer?.invalidate()
+            self.snapshot.preparationPercent = max(
+                self.snapshot.preparationPercent,
+                Self.preparationPercent(since: startedAt)
+            )
+            self.preparationTimer = Timer.scheduledTimer(
+                withTimeInterval: 2,
+                repeats: true
+            ) { [weak self] timer in
+                guard let self,
+                      self.hasActiveUpload,
+                      self.snapshot.totalBytes == 0,
+                      self.snapshot.phase != .failed else {
+                    timer.invalidate()
+                    return
+                }
+                self.snapshot.preparationPercent = max(
+                    self.snapshot.preparationPercent,
+                    Self.preparationPercent(since: startedAt)
+                )
+            }
+        }
+    }
+
+    private func stopPreparationProgress() {
+        DispatchQueue.main.async {
+            self.preparationTimer?.invalidate()
+            self.preparationTimer = nil
+        }
+    }
+
     func restoreBackgroundTasks() {
         backgroundSession.getAllTasks { [weak self] tasks in
             guard let self else { return }
@@ -315,9 +365,16 @@ final class UploadManager: NSObject, ObservableObject {
         beginImportBackgroundTime()
         let options = PHAssetResourceRequestOptions()
         options.isNetworkAccessAllowed = true
-        options.progressHandler = { [weak self] _ in
+        options.progressHandler = { [weak self] progress in
             self?.publish {
-                self?.snapshot.message = "正在通过加密安全通道接收您发送的视频，随后将立即上传并开始分析"
+                guard let self else { return }
+                self.snapshot.preparationPercent = max(
+                    self.snapshot.preparationPercent,
+                    min(15, max(1, Int((progress * 15).rounded())))
+                )
+                self.snapshot.message = self.snapshot.phase == .reading
+                    ? "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
+                    : "视频正在通过加密安全通道上传，可在后台继续"
             }
         }
         var readFailure: Error?
@@ -330,7 +387,7 @@ final class UploadManager: NSObject, ObservableObject {
                     self?.publish {
                         self?.snapshot.bytesRead = accumulator.totalAccepted
                         if self?.snapshot.phase == .reading {
-                            self?.snapshot.message = "正在通过加密安全通道接收您发送的视频，随后将立即上传并开始分析"
+                            self?.snapshot.message = "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
                         } else {
                             self?.snapshot.message = "视频正在通过加密安全通道上传，可在后台继续"
                         }
@@ -354,10 +411,15 @@ final class UploadManager: NSObject, ObservableObject {
                     self.manifest?.importFinished = true
                     self.persistManifestUnlocked()
                     self.lock.unlock()
+                    self.stopPreparationProgress()
                     self.publish {
                         self.snapshot.phase = .uploading
                         self.snapshot.bytesRead = result.bytes
                         self.snapshot.totalBytes = result.bytes
+                        self.snapshot.preparationPercent = max(
+                            15,
+                            self.snapshot.preparationPercent
+                        )
                         self.snapshot.message = "视频正在通过加密安全通道上传，可在后台继续"
                     }
                     self.maybeScheduleFinalize()
@@ -546,6 +608,7 @@ final class UploadManager: NSObject, ObservableObject {
     }
 
     private func completeUpload(taskID: String) {
+        stopPreparationProgress()
         let folder = directoryForExistingTask(taskID)
         try? FileManager.default.removeItem(at: folder)
         try? FileManager.default.removeItem(at: manifestURL)
@@ -575,6 +638,7 @@ final class UploadManager: NSObject, ObservableObject {
     }
 
     private func publishError(_ message: String) {
+        stopPreparationProgress()
         publish {
             self.lastError = message
             self.hasActiveUpload = self.manifest != nil

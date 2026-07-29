@@ -116,6 +116,7 @@ struct UploadSnapshot {
     var bytesRead: Int64 = 0
     var bytesUploaded: Int64 = 0
     var totalBytes: Int64 = 0
+    var preparationPercent: Int = 0
     var message = ""
 }
 
