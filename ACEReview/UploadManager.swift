@@ -132,13 +132,23 @@ final class UploadManager: NSObject, ObservableObject {
         super.init()
         manifest = loadManifest()
         if let manifest {
+            let restoredUploadedBytes: Int64
+            if manifest.totalParts > 0 {
+                restoredUploadedBytes = Int64(
+                    Double(manifest.totalBytes)
+                        * Double(manifest.completedParts.count)
+                        / Double(manifest.totalParts)
+                )
+            } else {
+                restoredUploadedBytes = 0
+            }
             hasActiveUpload = true
             activeTaskID = manifest.taskID
             snapshot = UploadSnapshot(
                 phase: manifest.importFinished ? .uploading : .reading,
                 filename: manifest.filename,
                 bytesRead: manifest.totalBytes,
-                bytesUploaded: 0,
+                bytesUploaded: restoredUploadedBytes,
                 totalBytes: manifest.importFinished ? manifest.totalBytes : 0,
                 message: manifest.importFinished
                     ? "视频正在通过加密安全通道上传，可在后台继续"
