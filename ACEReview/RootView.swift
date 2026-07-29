@@ -47,15 +47,7 @@ private struct MainTabView: View {
         }
         .tint(ACETheme.green)
         .task { await taskStore.load() }
-        .onAppear {
-            if uploads.hasActiveUpload {
-                selectedTab = 1
-            }
-        }
-        .onChange(of: uploads.snapshot.phase) { _, phase in
-            guard phase == .completed else { return }
-            selectedTab = 1
-            uploads.acknowledgeCompletion()
+        .onChange(of: uploads.completionCounter) { _, _ in
             Task { await taskStore.load() }
         }
     }

@@ -19,11 +19,17 @@ struct NewReviewView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
-                    if uploads.hasActiveUpload || uploads.snapshot.phase == .completed {
+                    if uploads.hasActiveUpload {
                         ActiveUploadEntryCard(onShowTasks: onShowTasks)
-                    } else {
+                    }
+                    if uploads.canStartUpload {
                         videoCard
                         detailsCard
+                    } else {
+                        Text("已有两个视频正在提交，请等待其中一个完成后继续。")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(ACETheme.muted)
+                            .aceCard()
                     }
                 }
                 .padding(18)
@@ -59,7 +65,7 @@ struct NewReviewView: View {
             Text("新建训练复盘")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .foregroundStyle(ACETheme.ink)
-            Text("选择视频后会边读取边上传；已生成的分片可在后台继续传输。")
+            Text("最多可同时提交两个视频；已生成的分片可在后台继续传输。")
                 .foregroundStyle(ACETheme.muted)
         }
         .padding(.top, 20)
@@ -214,16 +220,20 @@ private struct ActiveUploadEntryCard: View {
                 }
                 .frame(width: 46, height: 46)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("当前任务正在处理")
+                    Text("\(uploads.activeUploadCount) 个任务正在处理")
                         .font(.headline)
-                    Text(uploads.snapshot.filename)
+                    Text(uploads.activeFilenames.joined(separator: " · "))
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.75))
                         .lineLimit(1)
                 }
                 Spacer()
             }
-            Text(uploads.snapshot.message)
+            Text(
+                uploads.canStartUpload
+                    ? "你还可以继续提交一个视频"
+                    : "已达到两个并行任务上限"
+            )
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
             Button(action: onShowTasks) {
@@ -234,11 +244,6 @@ private struct ActiveUploadEntryCard: View {
             }
             .buttonStyle(PrimaryButtonStyle())
             .tint(ACETheme.green)
-            if uploads.snapshot.phase == .failed {
-                Button("继续提交") { uploads.retryFailedParts() }
-                    .foregroundStyle(ACETheme.lime)
-                    .font(.headline)
-            }
         }
         .padding(22)
         .foregroundStyle(.white)

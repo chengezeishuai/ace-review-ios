@@ -70,8 +70,8 @@ struct TaskListView: View {
                 try? await Task.sleep(for: .seconds(8))
             }
         }
-        .onChange(of: uploads.activeTaskID) { _, taskID in
-            guard taskID != nil else { return }
+        .onChange(of: uploads.snapshots.count) { _, count in
+            guard count > 0 else { return }
             Task { await taskStore.load() }
         }
     }
@@ -304,13 +304,13 @@ private struct TaskCard: View {
     }
 
     private var localSnapshot: UploadSnapshot? {
-        uploads.activeTaskID == task.id ? uploads.snapshot : nil
+        uploads.snapshot(for: task.id)
     }
 
     private var activeMessage: String {
         guard let localSnapshot else { return task.clientMessage }
         if localSnapshot.isShowingPreparation {
-            return "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
+            return "加密中…完成后将高速上传"
         }
         return localSnapshot.message
     }

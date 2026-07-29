@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import Photos
 import UIKit
@@ -86,9 +87,9 @@ private final class PartAccumulator {
     }
 }
 
-final class UploadManager: NSObject, ObservableObject {
-    static let shared = UploadManager()
-    static let backgroundIdentifier = "com.ace.review.background-upload"
+private final class UploadSlot: NSObject, ObservableObject {
+    let slotIndex: Int
+    let backgroundIdentifier: String
 
     @Published private(set) var snapshot = UploadSnapshot()
     @Published private(set) var hasActiveUpload = false
@@ -105,23 +106,22 @@ final class UploadManager: NSObject, ObservableObject {
     private var preparationTimer: Timer?
     private var preparationStartedAt: Date?
 
-    private static let minimumPreparationDisplay: TimeInterval = 5
+    private static let minimumPreparationDisplay: TimeInterval = 10
     private static let progressTick: TimeInterval = 0.05
-    private static let preparationMessage =
-        "因苹果安全限制，正在加密您选择的视频，加密准备完成后将高速上传并开始分析"
+    private static let preparationMessage = "加密中…完成后将高速上传"
     private static let uploadMessage =
         "视频正在通过加密安全通道上传，可在后台继续"
 
     private lazy var delegateQueue: OperationQueue = {
         let queue = OperationQueue()
-        queue.name = "com.ace.review.upload-delegate"
+        queue.name = "com.ace.review.upload-delegate.\(slotIndex)"
         queue.maxConcurrentOperationCount = 1
         return queue
     }()
 
     private lazy var backgroundSession: URLSession = {
         let configuration = URLSessionConfiguration.background(
-            withIdentifier: Self.backgroundIdentifier
+            withIdentifier: backgroundIdentifier
         )
         configuration.sessionSendsLaunchEvents = true
         configuration.isDiscretionary = false
@@ -137,7 +137,11 @@ final class UploadManager: NSObject, ObservableObject {
         return session
     }()
 
-    private override init() {
+    init(slotIndex: Int) {
+        self.slotIndex = slotIndex
+        self.backgroundIdentifier = slotIndex == 0
+            ? "com.ace.review.background-upload"
+            : "com.ace.review.background-upload.secondary"
         super.init()
         manifest = loadManifest()
         if let manifest {
@@ -232,7 +236,7 @@ final class UploadManager: NSObject, ObservableObject {
                     taskID: response.task.id,
                     assetIdentifier: asset.localIdentifier,
                     filename: filename,
-                    createdAt: Date(),
+                    createdAt: preparationStart,
                     partSize: response.partSize,
                     totalBytes: 0,
                     totalParts: 0,
@@ -616,7 +620,10 @@ final class UploadManager: NSObject, ObservableObject {
             for: .applicationSupportDirectory,
             in: .userDomainMask
         )[0]
-        return support.appendingPathComponent("ace-upload-manifest.json")
+        let filename = slotIndex == 0
+            ? "ace-upload-manifest.json"
+            : "ace-upload-manifest-secondary.json"
+        return support.appendingPathComponent(filename)
     }
 
     private func loadManifest() -> UploadManifest? {
@@ -708,7 +715,7 @@ final class UploadManager: NSObject, ObservableObject {
     }
 }
 
-extension UploadManager: URLSessionTaskDelegate, URLSessionDataDelegate {
+extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -777,5 +784,121 @@ extension UploadManager: URLSessionTaskDelegate, URLSessionDataDelegate {
             self?.backgroundEventsCompletionHandler?()
             self?.backgroundEventsCompletionHandler = nil
         }
+    }
+}
+
+final class UploadManager: ObservableObject {
+    static let shared = UploadManager()
+    static let maximumConcurrentUploads = 2
+
+    @Published private(set) var snapshots: [String: UploadSnapshot] = [:]
+    @Published private(set) var activeUploadCount = 0
+    @Published private(set) var completionCounter = 0
+    @Published private(set) var lastError = ""
+
+    private let slots: [UploadSlot]
+    private var cancellables: Set<AnyCancellable> = []
+    private var previousActiveTaskIDs: Set<String> = []
+    private var reservedSlotIndexes: Set<Int> = []
+
+    var hasActiveUpload: Bool { activeUploadCount > 0 }
+
+    var canStartUpload: Bool {
+        activeUploadCount + reservedSlotIndexes.count
+            < Self.maximumConcurrentUploads
+    }
+
+    var activeFilenames: [String] {
+        slots
+            .filter(\.hasActiveUpload)
+            .map(\.snapshot.filename)
+            .filter { !$0.isEmpty }
+    }
+
+    private init() {
+        slots = (0..<Self.maximumConcurrentUploads).map {
+            UploadSlot(slotIndex: $0)
+        }
+        for slot in slots {
+            slot.objectWillChange
+                .sink { [weak self] _ in
+                    DispatchQueue.main.async {
+                        self?.refreshPublishedState()
+                    }
+                }
+                .store(in: &cancellables)
+        }
+        refreshPublishedState()
+    }
+
+    func begin(
+        asset: PHAsset,
+        title: String,
+        player: String,
+        notes: String
+    ) {
+        guard let index = slots.indices.first(where: {
+            !slots[$0].hasActiveUpload && !reservedSlotIndexes.contains($0)
+        }) else {
+            lastError = "最多可同时提交两个视频，请等待其中一个完成"
+            return
+        }
+        reservedSlotIndexes.insert(index)
+        slots[index].begin(
+            asset: asset,
+            title: title,
+            player: player,
+            notes: notes
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.reservedSlotIndexes.remove(index)
+            self.refreshPublishedState()
+        }
+    }
+
+    func snapshot(for taskID: String) -> UploadSnapshot? {
+        snapshots[taskID]
+    }
+
+    func retryFailedParts(taskID: String) {
+        slots.first(where: { $0.activeTaskID == taskID })?
+            .retryFailedParts()
+    }
+
+    func restoreBackgroundTasks() {
+        slots.forEach { $0.restoreBackgroundTasks() }
+    }
+
+    func handleBackgroundEvents(
+        identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        guard let slot = slots.first(where: {
+            $0.backgroundIdentifier == identifier
+        }) else {
+            completionHandler()
+            return
+        }
+        slot.backgroundEventsCompletionHandler = completionHandler
+        slot.restoreBackgroundTasks()
+    }
+
+    private func refreshPublishedState() {
+        let activeSlots = slots.filter(\.hasActiveUpload)
+        let pairs: [(String, UploadSnapshot)] = activeSlots.compactMap { slot in
+                guard let taskID = slot.activeTaskID else { return nil }
+                return (taskID, slot.snapshot)
+            }
+        let newSnapshots = Dictionary(uniqueKeysWithValues: pairs)
+        let activeIDs = Set(newSnapshots.keys)
+        if !previousActiveTaskIDs.subtracting(activeIDs).isEmpty {
+            completionCounter += 1
+        }
+        previousActiveTaskIDs = activeIDs
+        snapshots = newSnapshots
+        activeUploadCount = activeSlots.count
+        lastError = activeSlots.compactMap {
+            $0.lastError.isEmpty ? nil : $0.lastError
+        }.first ?? ""
     }
 }

@@ -2,19 +2,15 @@ import SwiftUI
 import UIKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
-    var backgroundSessionCompletionHandler: (() -> Void)?
-
     func application(
         _ application: UIApplication,
         handleEventsForBackgroundURLSession identifier: String,
         completionHandler: @escaping () -> Void
     ) {
-        backgroundSessionCompletionHandler = completionHandler
-        UploadManager.shared.backgroundEventsCompletionHandler = { [weak self] in
-            self?.backgroundSessionCompletionHandler?()
-            self?.backgroundSessionCompletionHandler = nil
-        }
-        UploadManager.shared.restoreBackgroundTasks()
+        UploadManager.shared.handleBackgroundEvents(
+            identifier: identifier,
+            completionHandler: completionHandler
+        )
     }
 }
 
@@ -33,4 +29,3 @@ struct ACEReviewApp: App {
         }
     }
 }
-
