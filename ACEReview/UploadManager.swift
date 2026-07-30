@@ -185,6 +185,7 @@ private final class UploadSlot: NSObject, ObservableObject {
         _ = backgroundSession
         if let manifest {
             startPreparationProgress(startedAt: manifest.createdAt)
+            reconcileServerState(for: manifest)
         }
         restoreBackgroundTasks()
     }
@@ -899,5 +900,35 @@ final class UploadManager: ObservableObject {
         lastError = activeSlots.compactMap {
             $0.lastError.isEmpty ? nil : $0.lastError
         }.first ?? ""
+        }
     }
-}
+
+    private func reconcileServerState(for manifest: UploadManifest) {
+        Task { [weak self] in
+            guard let self else { return }
+            guard let remote = try? await APIClient.shared.task(id: manifest.taskID),
+                  remote.status != "uploading" else { return }
+            self.discardCompletedLocalUpload(taskID: manifest.taskID)
+        }
+    }
+
+    private func discardCompletedLocalUpload(taskID: String) {
+        backgroundSession.getAllTasks { [weak self] tasks in
+            guard let self else { return }
+            for task in tasks where task.taskDescription?.contains("|\(taskID)|") == true {
+                task.cancel()
+            }
+            self.stopPreparationProgress()
+            try? FileManager.default.removeItem(at: self.directoryForExistingTask(taskID))
+            try? FileManager.default.removeItem(at: self.manifestURL)
+            self.lock.lock()
+            self.manifest = nil
+            self.lock.unlock()
+            self.publish {
+                self.hasActiveUpload = false
+                self.activeTaskID = nil
+                self.lastError = ""
+                self.snapshot = UploadSnapshot()
+            }
+        }
+    }

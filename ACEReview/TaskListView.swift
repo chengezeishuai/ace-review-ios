@@ -27,7 +27,18 @@ struct TaskListView: View {
         }
         .navigationBarHidden(true)
         .sheet(item: $preview) { file in
-            QuickLookPreview(url: file.url)
+            NavigationStack {
+                QuickLookPreview(url: file.url)
+                    .navigationTitle("PDF 报告")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            ShareLink(item: file.url) {
+                                Image(systemName: "square.and.arrow.up")
+                            }
+                        }
+                    }
+            }
         }
         .sheet(item: $webPage) { page in
             NavigationStack {
@@ -261,7 +272,7 @@ private struct TaskCard: View {
                 actionLabel("删除任务", icon: "trash")
                     .foregroundStyle(.red)
             }
-            .disabled(task.status == "processing" || isWorking)
+            .disabled(isWorking)
         }
         .aceCard()
     }

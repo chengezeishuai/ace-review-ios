@@ -77,6 +77,10 @@ final class APIClient {
         try await request("api/tasks")
     }
 
+    func task(id: String) async throws -> TaskItem {
+        try await request("api/tasks/\(id)")
+    }
+
     func retryTask(id: String) async throws -> TaskEnvelope {
         try await request(
             "api/tasks/\(id)/retry",
