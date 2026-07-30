@@ -106,6 +106,9 @@ struct TaskListView: View {
             guard count > 0 else { return }
             Task { await taskStore.load() }
         }
+        .onChange(of: uploads.completionCounter) {
+            Task { await taskStore.load() }
+        }
     }
 
     private var header: some View {
@@ -221,37 +224,7 @@ private struct TaskCard: View {
             }
 
             if task.isActive {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(activeMessage)
-                        Spacer()
-                        if let activeProgress {
-                            Text("\(activeProgress)%")
-                                .monospacedDigit()
-                                .contentTransition(
-                                    .numericText(value: Double(activeProgress))
-                                )
-                                .animation(
-                                    .linear(duration: 0.08),
-                                    value: activeProgress
-                                )
-                        }
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ACETheme.green)
-                    if let activeProgress {
-                        ProgressView(value: Double(activeProgress), total: 100)
-                            .tint(ACETheme.green)
-                            .animation(
-                                .linear(duration: 0.08),
-                                value: activeProgress
-                            )
-                    } else {
-                        ProgressView()
-                            .progressViewStyle(.linear)
-                            .tint(ACETheme.green)
-                    }
-                }
+                activeStatus
             } else if task.isComplete {
                 reportButtons
                 Button(action: reanalyze) {
@@ -349,6 +322,85 @@ private struct TaskCard: View {
         uploads.snapshot(for: task.id)
     }
 
+    @ViewBuilder
+    private var activeStatus: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            if task.status == "uploading" {
+                uploadProgress
+            } else {
+                uploadCompleted
+            }
+            TaskStatusTimeline(
+                task: task,
+                localMessage: task.status == "uploading" ? activeMessage : nil
+            )
+        }
+    }
+
+    private var uploadProgress: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(activeMessage)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 10)
+                if let activeProgress {
+                    Text("\(activeProgress)%")
+                        .monospacedDigit()
+                        .contentTransition(
+                            .numericText(value: Double(activeProgress))
+                        )
+                        .animation(
+                            .linear(duration: 0.08),
+                            value: activeProgress
+                        )
+                }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(ACETheme.green)
+            if let activeProgress {
+                ProgressView(value: Double(activeProgress), total: 100)
+                    .tint(ACETheme.green)
+                    .animation(
+                        .linear(duration: 0.08),
+                        value: activeProgress
+                    )
+            } else {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .tint(ACETheme.green)
+            }
+            Label(
+                "上传期间请尽量不要离开 ACE",
+                systemImage: "iphone.and.arrow.forward"
+            )
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(ACETheme.muted)
+        }
+        .padding(13)
+        .background(ACETheme.green.opacity(0.055))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var uploadCompleted: some View {
+        HStack(alignment: .top, spacing: 11) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(ACETheme.green)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("原视频上传完成")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(ACETheme.ink)
+                Text("可以离开 ACE，云端将继续分析")
+                    .font(.caption)
+                    .foregroundStyle(ACETheme.muted)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(13)
+        .background(ACETheme.green.opacity(0.07))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
     private var activeMessage: String {
         guard let localSnapshot else { return task.clientMessage }
         if localSnapshot.isShowingPreparation {
@@ -381,6 +433,166 @@ private struct TaskCard: View {
                 / Double(localSnapshot.totalBytes)
             return min(100, max(0, Int((ratio * 100).rounded())))
         }
+    }
+}
+
+private struct TaskStatusTimeline: View {
+    let task: TaskItem
+    let localMessage: String?
+
+    private let steps = [
+        "上传完整原视频",
+        "云端校验与排队",
+        "筛选有效动作",
+        "整理训练回合",
+        "逐拍技术分析",
+        "生成复盘报告"
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Text("当前状态")
+                .font(.caption.bold())
+                .foregroundStyle(ACETheme.muted)
+
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(steps.enumerated()), id: \.offset) { index, title in
+                    HStack(alignment: .top, spacing: 11) {
+                        VStack(spacing: 0) {
+                            stepMarker(index)
+                            if index < steps.count - 1 {
+                                Rectangle()
+                                    .fill(connectorColor(after: index))
+                                    .frame(width: 2, height: 25)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            if index == currentStep {
+                                ShimmeringStatusText(text: title)
+                                    .font(.caption.bold())
+                                if !currentMessage.isEmpty {
+                                    Text(currentMessage)
+                                        .font(.caption2)
+                                        .foregroundStyle(ACETheme.muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            } else {
+                                Text(title)
+                                    .font(.caption.weight(
+                                        index < currentStep ? .semibold : .regular
+                                    ))
+                                    .foregroundStyle(
+                                        index < currentStep
+                                            ? ACETheme.green
+                                            : ACETheme.muted.opacity(0.55)
+                                    )
+                            }
+                        }
+                        .padding(.top, 1)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+        .padding(13)
+        .background(ACETheme.cream.opacity(0.72))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func stepMarker(_ index: Int) -> some View {
+        if index < currentStep {
+            Image(systemName: "checkmark")
+                .font(.system(size: 8, weight: .black))
+                .foregroundStyle(.white)
+                .frame(width: 18, height: 18)
+                .background(ACETheme.green)
+                .clipShape(Circle())
+        } else if index == currentStep {
+            Circle()
+                .fill(ACETheme.lime)
+                .frame(width: 18, height: 18)
+                .overlay {
+                    Circle()
+                        .stroke(ACETheme.green.opacity(0.35), lineWidth: 3)
+                        .scaleEffect(1.25)
+                }
+        } else {
+            Circle()
+                .fill(ACETheme.muted.opacity(0.16))
+                .frame(width: 18, height: 18)
+        }
+    }
+
+    private func connectorColor(after index: Int) -> Color {
+        index < currentStep
+            ? ACETheme.green.opacity(0.65)
+            : ACETheme.muted.opacity(0.14)
+    }
+
+    private var currentStep: Int {
+        switch task.status {
+        case "uploading":
+            return 0
+        case "queued":
+            return 1
+        case "processing":
+            switch task.progress {
+            case ..<28: return 1
+            case 28..<50: return 2
+            case 50..<68: return 3
+            case 68..<93: return 4
+            default: return 5
+            }
+        default:
+            return 5
+        }
+    }
+
+    private var currentMessage: String {
+        if let localMessage {
+            let local = localMessage.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+            if !local.isEmpty { return local }
+        }
+        let message = task.clientMessage.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        if !message.isEmpty { return message }
+        return task.stage
+    }
+}
+
+private struct ShimmeringStatusText: View {
+    let text: String
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+            let duration = 2.2
+            let elapsed = context.date.timeIntervalSinceReferenceDate
+            let position = elapsed.truncatingRemainder(
+                dividingBy: duration
+            ) / duration
+            let center = -0.35 + position * 1.7
+            Text(text)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            ACETheme.green,
+                            ACETheme.green,
+                            ACETheme.lime,
+                            Color.white,
+                            ACETheme.lime,
+                            ACETheme.green,
+                            ACETheme.green
+                        ],
+                        startPoint: UnitPoint(x: center - 0.35, y: 0.5),
+                        endPoint: UnitPoint(x: center + 0.35, y: 0.5)
+                    )
+                )
+        }
+        .accessibilityLabel(text)
     }
 }
 

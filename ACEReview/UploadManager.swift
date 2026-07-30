@@ -109,8 +109,7 @@ private final class UploadSlot: NSObject, ObservableObject {
     private static let minimumPreparationDisplay: TimeInterval = 10
     private static let progressTick: TimeInterval = 0.05
     private static let preparationMessage = "加密中…完成后将高速上传"
-    private static let uploadMessage =
-        "视频正在通过加密安全通道上传，可在后台继续"
+    private static let uploadMessage = "原视频正在通过加密安全通道上传"
 
     private lazy var delegateQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -687,11 +686,11 @@ private final class UploadSlot: NSObject, ObservableObject {
             self.activeTaskID = nil
             self.lastError = ""
             self.snapshot.phase = .completed
-            self.snapshot.message = "视频已提交，正在前往任务列表"
+            self.snapshot.message = "原视频上传完成，云端正在分析"
         }
         let content = UNMutableNotificationContent()
-        content.title = "视频已提交"
-        content.body = "ACE 已开始分析你的训练录像"
+        content.title = "原视频上传完成"
+        content.body = "ACE 云端已开始分析你的训练录像"
         let request = UNNotificationRequest(
             identifier: "ace-upload-\(taskID)",
             content: content,

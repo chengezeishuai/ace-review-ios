@@ -58,7 +58,7 @@ struct NewReviewView: View {
             Text("新建训练复盘")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .foregroundStyle(ACETheme.ink)
-            Text("最多可同时提交两个视频；已生成的分片可在后台继续传输。")
+            Text("最多可同时提交两个视频；原视频上传完成后由云端继续分析。")
                 .foregroundStyle(ACETheme.muted)
         }
         .padding(.top, 20)
