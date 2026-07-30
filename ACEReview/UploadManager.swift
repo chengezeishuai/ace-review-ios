@@ -594,7 +594,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                 .appendingPathComponent("finalize.json")
             let body: [String: Any] = [
                 "size": manifest.totalBytes,
-                "total_parts": manifest.totalParts
+                "totalParts": manifest.totalParts
             ]
             try JSONSerialization.data(withJSONObject: body).write(
                 to: bodyURL,
@@ -622,6 +622,7 @@ private final class UploadSlot: NSObject, ObservableObject {
     }
 
     private func attachAuthorization(to request: inout URLRequest) {
+        request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
         if let token = KeychainStore.get("accessToken") {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }

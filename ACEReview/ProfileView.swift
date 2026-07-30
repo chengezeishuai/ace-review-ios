@@ -84,6 +84,13 @@ struct ProfileView: View {
                     }
                     .aceCard()
 
+                    NavigationLink {
+                        CommerceView()
+                    } label: {
+                        settingsRow("订购服务与加次包", icon: "creditcard")
+                    }
+                    .aceCard()
+
                     if !memberships.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("我的组织与身份").font(.headline)

@@ -1,26 +1,24 @@
 import Foundation
 
 struct LoginResponse: Decodable {
-    let ok: Bool
     let username: String
     let mustChangePassword: Bool
     let accessToken: String
 
     enum CodingKeys: String, CodingKey {
-        case ok, username
+        case username
         case mustChangePassword = "must_change_password"
         case accessToken = "access_token"
     }
 }
 
 struct PasswordChangeResponse: Decodable {
-    let ok: Bool
     let username: String
     let mustChangePassword: Bool
     let accessToken: String
 
     enum CodingKeys: String, CodingKey {
-        case ok, username
+        case username
         case mustChangePassword = "must_change_password"
         case accessToken = "access_token"
     }
@@ -69,6 +67,21 @@ struct TaskItem: Identifiable, Decodable {
 
 struct TaskEnvelope: Decodable {
     let task: TaskItem
+}
+
+struct EvidenceCreateResponse: Decodable {
+    let task: TaskReference
+    let frameCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case task
+        case frameCount = "frame_count"
+    }
+}
+
+struct TaskReference: Decodable {
+    let id: String
+    let status: String
 }
 
 struct StreamingUploadResponse: Decodable {
@@ -122,6 +135,38 @@ struct EntitlementItem: Decodable, Identifiable {
 }
 
 struct EntitlementEnvelope: Decodable { let entitlements: [EntitlementItem] }
+
+struct CommerceProduct: Decodable, Identifiable {
+    let code: String
+    let name: String
+    let priceCent: Int
+    let cloudCredits: Int
+    let localCredits: Int
+    let productType: String
+
+    var id: String { code }
+    enum CodingKeys: String, CodingKey {
+        case code, name
+        case priceCent = "price_cent"
+        case cloudCredits = "cloud_credits"
+        case localCredits = "local_credits"
+        case productType = "product_type"
+    }
+}
+
+struct CommerceOrder: Decodable {
+    let orderID: String
+    let entitlementID: String
+    let cloudCredits: Int
+    let localCredits: Int
+
+    enum CodingKeys: String, CodingKey {
+        case orderID = "order_id"
+        case entitlementID = "entitlement_id"
+        case cloudCredits = "cloud_credits"
+        case localCredits = "local_credits"
+    }
+}
 
 struct CoachComment: Decodable, Identifiable {
     let id: String

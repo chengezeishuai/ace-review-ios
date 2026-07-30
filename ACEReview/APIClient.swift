@@ -21,7 +21,8 @@ final class APIClient {
     private init() {}
 
     func url(for path: String) -> URL {
-        URL(string: path, relativeTo: AppSettings.shared.baseURL)!.absoluteURL
+        let normalized = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return URL(string: normalized, relativeTo: AppSettings.shared.baseURL)!.absoluteURL
     }
 
     func request<T: Decodable>(
@@ -34,6 +35,7 @@ final class APIClient {
         request.httpMethod = method
         request.timeoutInterval = 60
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
         if let body {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -46,14 +48,27 @@ final class APIClient {
             throw APIClientError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
-            let detail = (try? decoder.decode(APIErrorBody.self, from: data).detail)
-                ?? "请求失败（\(http.statusCode)）"
+            let detail = serverMessage(data, fallback: "请求失败（\(http.statusCode)）")
             throw APIClientError.server(detail)
         }
         if T.self == EmptyResponse.self, data.isEmpty {
             return EmptyResponse() as! T
         }
-        return try decoder.decode(T.self, from: data)
+        let envelope = try decoder.decode(RuoYiEnvelope<T>.self, from: data)
+        guard envelope.code == 200 else {
+            throw APIClientError.server(envelope.message ?? "请求未完成")
+        }
+        if let value = envelope.data {
+            return value
+        }
+        if T.self == EmptyResponse.self {
+            return EmptyResponse() as! T
+        }
+        throw APIClientError.invalidResponse
+    }
+
+    private func serverMessage(_ data: Data, fallback: String) -> String {
+        (try? decoder.decode(RuoYiMessage.self, from: data).message) ?? fallback
     }
 
     func login(username: String, password: String) async throws -> LoginResponse {
@@ -67,69 +82,80 @@ final class APIClient {
 
     func changePassword(current: String, new: String) async throws -> PasswordChangeResponse {
         try await request(
-            "api/change-password",
+            "api/app/account/password",
             method: "POST",
             body: ["current_password": current, "new_password": new]
         )
     }
 
     func tasks() async throws -> [TaskItem] {
-        try await request("api/tasks")
+        try await request("api/app/tasks")
     }
 
     func memberships() async throws -> MembershipEnvelope {
-        try await request("api/account/memberships")
+        try await request("api/app/account/memberships")
     }
 
     func entitlements() async throws -> EntitlementEnvelope {
-        try await request("api/account/entitlements")
+        try await request("api/app/account/entitlements")
     }
 
     func task(id: String) async throws -> TaskItem {
-        try await request("api/tasks/\(id)")
+        try await request("api/app/tasks/\(id)")
     }
 
     func comments(taskID: String) async throws -> CoachCommentEnvelope {
-        try await request("api/tasks/\(taskID)/comments")
+        try await request("api/app/tasks/\(taskID)/comments")
     }
 
     func addComment(taskID: String, content: String) async throws {
-        let _: EmptyResponse = try await request("api/tasks/\(taskID)/comments", method: "POST", body: ["content": content])
+        let _: EmptyResponse = try await request("api/app/tasks/\(taskID)/comments", method: "POST", body: ["content": content])
     }
 
     func trainingPlans() async throws -> TrainingPlanEnvelope {
-        try await request("api/training-plans")
+        try await request("api/app/training-plans")
     }
 
     func progress() async throws -> ProgressSummary {
-        try await request("api/account/progress")
+        try await request("api/app/account/progress")
     }
 
-    func retryTask(id: String) async throws -> TaskEnvelope {
+    func commerceCatalog() async throws -> [CommerceProduct] {
+        try await request("api/app/commerce/catalog")
+    }
+
+    func purchase(productCode: String) async throws -> CommerceOrder {
+        try await request("api/app/commerce/orders", method: "POST", body: [
+            "productCode": productCode,
+            "idempotencyKey": UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        ])
+    }
+
+    func retryTask(id: String) async throws -> TaskItem {
         try await request(
-            "api/tasks/\(id)/retry",
+            "api/app/tasks/\(id)/retry",
             method: "POST"
         )
     }
 
-    func reanalyzeTask(id: String, focus: String, label: String) async throws -> TaskEnvelope {
+    func reanalyzeTask(id: String, focus: String, label: String) async throws -> TaskItem {
         try await request(
-            "api/tasks/\(id)/reanalyze",
+            "api/app/tasks/\(id)/reanalyze",
             method: "POST",
             body: ["focus": focus, "label": label]
         )
     }
 
     func deleteTask(id: String) async throws {
-        let _: DeleteResponse = try await request(
-            "api/tasks/\(id)",
+        let _: EmptyResponse = try await request(
+            "api/app/tasks/\(id)",
             method: "DELETE"
         )
     }
 
-    func renameTask(id: String, title: String) async throws -> TaskEnvelope {
+    func renameTask(id: String, title: String) async throws -> TaskItem {
         try await request(
-            "api/tasks/\(id)",
+            "api/app/tasks/\(id)",
             method: "PATCH",
             body: ["title": title]
         )
@@ -147,7 +173,7 @@ final class APIClient {
             method: "POST",
             body: [
                 "filename": filename,
-                "mime_type": mimeType,
+                "mimeType": mimeType,
                 "title": title,
                 "player": player,
                 "notes": notes
@@ -158,10 +184,10 @@ final class APIClient {
     func createEvidence(
         title: String, player: String, notes: String,
         durationSeconds: TimeInterval, frameCount: Int
-    ) async throws -> TaskEnvelope {
+    ) async throws -> EvidenceCreateResponse {
         try await request("api/app/evidence", method: "POST", body: [
             "title": title, "player": player, "notes": notes,
-            "duration_seconds": durationSeconds, "frame_count": frameCount
+            "durationSeconds": durationSeconds, "frameCount": frameCount
         ])
     }
 
@@ -171,24 +197,28 @@ final class APIClient {
         request.timeoutInterval = 60
         request.httpBody = data
         request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
         if let token = KeychainStore.get("accessToken") {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         let (responseData, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            let detail = (try? decoder.decode(APIErrorBody.self, from: responseData).detail) ?? "证据帧上传失败"
+            let detail = serverMessage(responseData, fallback: "证据帧上传失败")
             throw APIClientError.server(detail)
         }
+        let envelope = try decoder.decode(RuoYiEnvelope<EmptyResponse>.self, from: responseData)
+        guard envelope.code == 200 else { throw APIClientError.server(envelope.message ?? "证据帧上传失败") }
     }
 
-    func finalizeEvidence(taskID: String, durationSeconds: TimeInterval, frameCount: Int) async throws -> TaskEnvelope {
+    func finalizeEvidence(taskID: String, durationSeconds: TimeInterval, frameCount: Int) async throws -> EmptyResponse {
         try await request("api/app/evidence/\(taskID)/finalize", method: "POST", body: [
-            "duration_seconds": durationSeconds, "frame_count": frameCount
+            "durationSeconds": durationSeconds, "frameCount": frameCount
         ])
     }
 
     func download(path: String) async throws -> URL {
         var request = URLRequest(url: url(for: path))
+        request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
         if let token = KeychainStore.get("accessToken") {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -205,6 +235,18 @@ final class APIClient {
     }
 }
 
-private struct DeleteResponse: Decodable {
-    let ok: Bool
+private struct RuoYiEnvelope<Payload: Decodable>: Decodable {
+    let code: Int
+    let message: String?
+    let data: Payload?
+
+    enum CodingKeys: String, CodingKey {
+        case code, data
+        case message = "msg"
+    }
+}
+
+private struct RuoYiMessage: Decodable {
+    let message: String?
+    enum CodingKeys: String, CodingKey { case message = "msg" }
 }

@@ -46,6 +46,9 @@ private struct MainTabView: View {
             .tag(2)
         }
         .tint(ACETheme.green)
+        .toolbarBackground(ACETheme.paper, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarColorScheme(.light, for: .tabBar)
         .task { await taskStore.load() }
         .onChange(of: uploads.completionCounter) { _, _ in
             Task { await taskStore.load() }

@@ -17,6 +17,7 @@ struct AuthenticatedWebView: UIViewRepresentable {
         let baseURL = AppSettings.shared.baseURL
         let target = APIClient.shared.url(for: path)
         var request = URLRequest(url: target)
+        request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
         if let token = KeychainStore.get("accessToken") {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             let cookieHeader = [
