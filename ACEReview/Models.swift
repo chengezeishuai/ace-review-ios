@@ -154,6 +154,17 @@ struct TrainingPlan: Decodable, Identifiable {
 
 struct TrainingPlanEnvelope: Decodable { let plans: [TrainingPlan] }
 
+struct ProgressSummary: Decodable {
+    let totalCompleted: Int
+    let cloudCompleted: Int
+    let localCompleted: Int
+    enum CodingKeys: String, CodingKey {
+        case totalCompleted = "total_completed"
+        case cloudCompleted = "cloud_completed"
+        case localCompleted = "local_completed"
+    }
+}
+
 struct UploadManifest: Codable {
     let taskID: String
     let assetIdentifier: String

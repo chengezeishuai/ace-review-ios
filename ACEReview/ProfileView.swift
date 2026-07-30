@@ -6,6 +6,7 @@ struct ProfileView: View {
     @State private var memberships: [MembershipItem] = []
     @State private var entitlements: [EntitlementItem] = []
     @State private var trainingPlans: [TrainingPlan] = []
+    @State private var progress: ProgressSummary?
     @State private var loadError = ""
 
     var body: some View {
@@ -44,6 +45,17 @@ struct ProfileView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .aceCard()
+
+                    if let progress {
+                        HStack(spacing: 0) {
+                            progressMetric("完成复盘", value: progress.totalCompleted)
+                            Divider().frame(height: 36)
+                            progressMetric("云端", value: progress.cloudCompleted)
+                            Divider().frame(height: 36)
+                            progressMetric("本地", value: progress.localCompleted)
+                        }
+                        .aceCard()
+                    }
 
                     VStack(alignment: .leading, spacing: 12) {
                         Text("分析额度")
@@ -164,10 +176,12 @@ struct ProfileView: View {
             async let membershipRequest = APIClient.shared.memberships()
             async let entitlementRequest = APIClient.shared.entitlements()
             async let plansRequest = APIClient.shared.trainingPlans()
-            let (membershipResponse, entitlementResponse, plansResponse) = try await (membershipRequest, entitlementRequest, plansRequest)
+            async let progressRequest = APIClient.shared.progress()
+            let (membershipResponse, entitlementResponse, plansResponse, progressResponse) = try await (membershipRequest, entitlementRequest, plansRequest, progressRequest)
             memberships = membershipResponse.memberships
             entitlements = entitlementResponse.entitlements
             trainingPlans = plansResponse.plans
+            progress = progressResponse
         } catch {
             loadError = "账户权益暂时无法加载"
         }
@@ -179,5 +193,13 @@ struct ProfileView: View {
 
     private func roleName(_ code: String) -> String {
         ["athlete": "学员", "coach": "教练", "parent": "家长", "agent": "代理商", "club_admin": "俱乐部管理员", "region_admin": "区域管理员", "team_admin": "校队管理员", "club_operator": "俱乐部运营"][code] ?? code
+    }
+
+    private func progressMetric(_ label: String, value: Int) -> some View {
+        VStack(spacing: 4) {
+            Text("\(value)").font(.title3.bold()).foregroundStyle(ACETheme.green)
+            Text(label).font(.caption).foregroundStyle(ACETheme.muted)
+        }
+        .frame(maxWidth: .infinity)
     }
 }

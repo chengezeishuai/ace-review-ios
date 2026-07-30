@@ -101,6 +101,10 @@ final class APIClient {
         try await request("api/training-plans")
     }
 
+    func progress() async throws -> ProgressSummary {
+        try await request("api/account/progress")
+    }
+
     func retryTask(id: String) async throws -> TaskEnvelope {
         try await request(
             "api/tasks/\(id)/retry",
