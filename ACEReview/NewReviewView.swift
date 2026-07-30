@@ -10,7 +10,6 @@ struct NewReviewView: View {
     @State private var player = ""
     @State private var notes = ""
     @State private var showPicker = false
-    @State private var showPermissionExplanation = false
     @State private var thumbnail: UIImage?
 
     var body: some View {
@@ -43,12 +42,6 @@ struct NewReviewView: View {
                 loadThumbnail(asset)
             }
             .ignoresSafeArea()
-        }
-        .alert("允许访问训练视频", isPresented: $showPermissionExplanation) {
-            Button("继续") { requestPhotoAccess() }
-            Button("暂不", role: .cancel) {}
-        } message: {
-            Text("ACE 只读取你选择的训练录像，用于后台上传和生成个人复盘报告。")
         }
         .task {
             try? await UNUserNotificationCenter.current()
@@ -107,13 +100,13 @@ struct NewReviewView: View {
                         systemImage: "clock"
                     )
                     Spacer()
-                    Button("重新选择") { showPermissionExplanation = true }
+                    Button("重新选择") { beginVideoSelection() }
                 }
                 .font(.subheadline)
                 .foregroundStyle(ACETheme.green)
             } else {
                 Button("从相册选择") {
-                    showPermissionExplanation = true
+                    beginVideoSelection()
                 }
                 .buttonStyle(PrimaryButtonStyle())
             }
@@ -184,6 +177,15 @@ struct NewReviewView: View {
                     showPicker = true
                 }
             }
+        }
+    }
+
+    private func beginVideoSelection() {
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if status == .authorized || status == .limited {
+            showPicker = true
+        } else {
+            requestPhotoAccess()
         }
     }
 
