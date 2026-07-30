@@ -7,6 +7,7 @@ struct CommerceView: View {
     @State private var purchasingID: String?
     @State private var errorMessage = ""
     @State private var purchaseMessage = ""
+    @State private var isLoading = true
 
     var body: some View {
         ZStack {
@@ -16,8 +17,19 @@ struct CommerceView: View {
                     Text("服务与额度")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(ACETheme.ink)
-                    if products.isEmpty {
+                    if isLoading {
                         ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40)
+                    } else if products.isEmpty {
+                        ContentUnavailableView(
+                            "暂未开放服务",
+                            systemImage: "creditcard",
+                            description: Text("当前账号没有可购买的套餐，请稍后重试。")
+                        ) {
+                            Button("重新加载") { Task { await load() } }
+                                .buttonStyle(.bordered)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 38)
                     } else {
                         ForEach(products) { product in
                             VStack(alignment: .leading, spacing: 11) {
@@ -62,12 +74,17 @@ struct CommerceView: View {
     }
 
     private func load() async {
+        isLoading = true
+        defer { isLoading = false }
         do {
             async let catalog = APIClient.shared.commerceCatalog()
             async let credits = APIClient.shared.entitlements()
             products = try await catalog
             entitlements = try await credits.entitlements
-        } catch { errorMessage = error.localizedDescription }
+        } catch {
+            products = []
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func purchase(_ product: CommerceProduct) async {
