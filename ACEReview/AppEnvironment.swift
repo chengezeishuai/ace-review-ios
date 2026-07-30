@@ -24,8 +24,11 @@ final class AppSettings {
             preconditionFailure("ACE API address is not configured")
         }
 #if !DEBUG
-        guard scheme == "https" else {
-            preconditionFailure("Release builds require an HTTPS ACE API address")
+        guard scheme == "https",
+              let host = url.host,
+              !host.isEmpty,
+              !host.localizedCaseInsensitiveContains("replace_with_ace_domain") else {
+            preconditionFailure("Release builds require a configured HTTPS ACE API address")
         }
 #endif
         baseURL = url
