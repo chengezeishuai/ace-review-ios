@@ -199,7 +199,7 @@ struct ProfileView: View {
     }
 
     private func roleName(_ code: String) -> String {
-        ["athlete": "学员", "coach": "教练", "parent": "家长", "agent": "代理商", "club_admin": "俱乐部管理员", "region_admin": "区域管理员", "team_admin": "校队管理员", "club_operator": "俱乐部运营"][code] ?? code
+        ["athlete": "学员", "coach": "教练", "parent": "家长", "agent": "代理商", "club_admin": "俱乐部管理员", "region_admin": "区域管理员", "team_admin": "校队管理员", "club_operator": "俱乐部运营", "platform_admin": "平台管理员", "support": "客服", "finance": "财务"][code] ?? code
     }
 
     private func progressMetric(_ label: String, value: Int) -> some View {

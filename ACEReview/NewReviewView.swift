@@ -13,6 +13,9 @@ struct NewReviewView: View {
     @State private var showPicker = false
     @State private var thumbnail: UIImage?
     @State private var analysisMode = AnalysisMode.cloud
+    @State private var entitlements: [EntitlementItem] = []
+    @State private var isLoadingCredits = false
+    @State private var creditLoadError = ""
 
     private enum AnalysisMode: String, CaseIterable, Identifiable {
         case cloud, local
@@ -56,7 +59,9 @@ struct NewReviewView: View {
             try? await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .sound, .badge])
             localEvidence.resumePendingUpload()
+            await refreshCredits()
         }
+        .onAppear { Task { await refreshCredits() } }
     }
 
     private var header: some View {
@@ -138,6 +143,7 @@ struct NewReviewView: View {
                  : "视频仅在本机提取关键动作画面，原视频不会上传。")
                 .font(.caption)
                 .foregroundStyle(ACETheme.muted)
+            creditSummary
             field("训练主题（选填）", text: $title)
             field("学员称呼（选填）", text: $player)
             VStack(alignment: .leading, spacing: 8) {
@@ -171,9 +177,73 @@ struct NewReviewView: View {
                 )
             }
             .buttonStyle(PrimaryButtonStyle())
-            .disabled(selectedAsset == nil || localEvidence.isWorking)
+            .disabled(selectedAsset == nil || localEvidence.isWorking || hasNoUsableCredits)
         }
         .aceCard()
+    }
+
+    private var creditSummary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(analysisMode == .cloud ? "云端分析额度" : "本地隐私分析额度")
+                        .font(.caption.bold())
+                        .foregroundStyle(ACETheme.muted)
+                    if isLoadingCredits {
+                        Text("正在读取可用次数")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(ACETheme.ink)
+                    } else if !creditLoadError.isEmpty {
+                        Text("额度信息暂不可用，提交时将再次校验")
+                            .font(.caption)
+                            .foregroundStyle(ACETheme.muted)
+                    } else {
+                        Text("剩余 \(availableCredits) 次")
+                            .font(.title3.bold())
+                            .foregroundStyle(availableCredits > 0 ? ACETheme.green : .red)
+                    }
+                }
+                Spacer()
+                NavigationLink {
+                    CommerceView()
+                } label: {
+                    Label("订购/加次", systemImage: "plus.circle")
+                        .font(.caption.bold())
+                }
+                .foregroundStyle(ACETheme.green)
+            }
+            if hasNoUsableCredits {
+                Text("当前模式没有可用次数，请先订购套餐或加次包。")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .padding(.vertical, 11)
+        .overlay(alignment: .top) { Divider() }
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var availableCredits: Int {
+        entitlements.reduce(0) { total, item in
+            total + (analysisMode == .cloud ? item.cloudRemaining : item.localRemaining)
+        }
+    }
+
+    private var hasNoUsableCredits: Bool {
+        !isLoadingCredits && creditLoadError.isEmpty && availableCredits <= 0
+    }
+
+    private func refreshCredits() async {
+        guard !isLoadingCredits else { return }
+        isLoadingCredits = true
+        defer { isLoadingCredits = false }
+        do {
+            let response = try await APIClient.shared.entitlements()
+            entitlements = response.entitlements
+            creditLoadError = ""
+        } catch {
+            creditLoadError = error.localizedDescription
+        }
     }
 
     private var localEvidenceCard: some View {
