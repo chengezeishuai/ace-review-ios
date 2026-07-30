@@ -131,6 +131,10 @@ final class APIClient {
         ])
     }
 
+    func commerceOrders() async throws -> [CommerceOrderHistoryItem] {
+        try await request("api/app/commerce/orders")
+    }
+
     func retryTask(id: String) async throws -> TaskItem {
         try await request(
             "api/app/tasks/\(id)/retry",

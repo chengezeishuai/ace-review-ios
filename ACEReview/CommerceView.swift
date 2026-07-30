@@ -4,6 +4,7 @@ import SwiftUI
 struct CommerceView: View {
     @State private var products: [CommerceProduct] = []
     @State private var entitlements: [EntitlementItem] = []
+    @State private var orders: [CommerceOrderHistoryItem] = []
     @State private var purchasingID: String?
     @State private var errorMessage = ""
     @State private var purchaseMessage = ""
@@ -54,6 +55,24 @@ struct CommerceView: View {
                             }
                         }.aceCard()
                     }
+                    if !orders.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("订购记录").font(.headline)
+                            ForEach(orders.prefix(8)) { order in
+                                HStack(alignment: .firstTextBaseline) {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(order.productCode).font(.subheadline.bold())
+                                        Text(order.beneficiaryName).font(.caption).foregroundStyle(ACETheme.muted)
+                                    }
+                                    Spacer()
+                                    VStack(alignment: .trailing, spacing: 3) {
+                                        Text(order.status == "paid" ? "已开通" : order.status).font(.caption.bold())
+                                        if let paidAt = order.paidAt { Text(paidAt).font(.caption2).foregroundStyle(ACETheme.muted) }
+                                    }
+                                }
+                            }
+                        }.aceCard()
+                    }
                 }.padding(18)
             }
         }
@@ -70,8 +89,10 @@ struct CommerceView: View {
         do {
             async let catalog = APIClient.shared.commerceCatalog()
             async let credits = APIClient.shared.entitlements()
+            async let orderHistory = APIClient.shared.commerceOrders()
             products = try await catalog
             entitlements = try await credits.entitlements
+            orders = try await orderHistory
         } catch {
             products = []
             errorMessage = error.localizedDescription

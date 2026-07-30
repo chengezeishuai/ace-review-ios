@@ -168,6 +168,21 @@ struct CommerceOrder: Decodable {
     }
 }
 
+struct CommerceOrderHistoryItem: Decodable, Identifiable {
+    let id: String
+    let productCode: String
+    let beneficiaryName: String
+    let status: String
+    let paidAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, status
+        case productCode = "product_code"
+        case beneficiaryName = "beneficiary_name"
+        case paidAt = "paid_at"
+    }
+}
+
 struct CoachComment: Decodable, Identifiable {
     let id: String
     let content: String
