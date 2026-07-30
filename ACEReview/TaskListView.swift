@@ -9,6 +9,8 @@ struct TaskListView: View {
     @State private var reportError = ""
     @State private var reanalyzeTask: TaskItem?
     @State private var deleteTask: TaskItem?
+    @State private var renameTask: TaskItem?
+    @State private var renameTitle = ""
 
     var body: some View {
         ZStack {
@@ -63,6 +65,36 @@ struct TaskListView: View {
             Button("取消", role: .cancel) { deleteTask = nil }
         } message: {
             Text("原始视频和分析结果都会从当前账号中移除。")
+        }
+        .alert(
+            "重命名训练",
+            isPresented: Binding(
+                get: { renameTask != nil },
+                set: {
+                    if !$0 {
+                        renameTask = nil
+                        renameTitle = ""
+                    }
+                }
+            )
+        ) {
+            TextField("训练名称", text: $renameTitle)
+            Button("保存") {
+                guard let task = renameTask else { return }
+                let title = renameTitle
+                renameTask = nil
+                renameTitle = ""
+                Task { await taskStore.rename(task, title: title) }
+            }
+            .disabled(
+                renameTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+            Button("取消", role: .cancel) {
+                renameTask = nil
+                renameTitle = ""
+            }
+        } message: {
+            Text("修改后，Web 端和其他设备会同步显示新名称。")
         }
         .task {
             while !Task.isCancelled {
@@ -120,6 +152,10 @@ struct TaskListView: View {
                     openRally: { openRally(task) },
                     retry: { Task { await taskStore.retry(task) } },
                     reanalyze: { reanalyzeTask = task },
+                    rename: {
+                        renameTitle = task.title
+                        renameTask = task
+                    },
                     delete: { deleteTask = task }
                 )
             }
@@ -157,6 +193,7 @@ private struct TaskCard: View {
     let openRally: () -> Void
     let retry: () -> Void
     let reanalyze: () -> Void
+    let rename: () -> Void
     let delete: () -> Void
 
     var body: some View {
@@ -240,6 +277,11 @@ private struct TaskCard: View {
                 }
                 .disabled(isWorking)
             }
+
+            Button(action: rename) {
+                actionLabel("重命名训练", icon: "pencil")
+            }
+            .disabled(isWorking)
 
             Divider()
             Button(role: .destructive, action: delete) {

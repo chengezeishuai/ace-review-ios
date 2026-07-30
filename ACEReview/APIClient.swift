@@ -99,6 +99,14 @@ final class APIClient {
         )
     }
 
+    func renameTask(id: String, title: String) async throws -> TaskEnvelope {
+        try await request(
+            "api/tasks/\(id)",
+            method: "PATCH",
+            body: ["title": title]
+        )
+    }
+
     func createStreamingUpload(
         filename: String,
         mimeType: String,

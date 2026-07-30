@@ -74,4 +74,19 @@ final class TaskStore: ObservableObject {
             loadState = .failed(error.localizedDescription)
         }
     }
+
+    func rename(_ task: TaskItem, title: String) async {
+        let cleaned = String(
+            title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80)
+        )
+        guard !cleaned.isEmpty, !workingTaskIDs.contains(task.id) else { return }
+        workingTaskIDs.insert(task.id)
+        defer { workingTaskIDs.remove(task.id) }
+        do {
+            _ = try await APIClient.shared.renameTask(id: task.id, title: cleaned)
+            await load()
+        } catch {
+            loadState = .failed(error.localizedDescription)
+        }
+    }
 }
