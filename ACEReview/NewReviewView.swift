@@ -5,12 +5,20 @@ import UserNotifications
 struct NewReviewView: View {
     let onShowTasks: () -> Void
     @EnvironmentObject private var uploads: UploadManager
+    @StateObject private var localEvidence = LocalEvidenceManager.shared
     @State private var selectedAsset: PHAsset?
     @State private var title = ""
     @State private var player = ""
     @State private var notes = ""
     @State private var showPicker = false
     @State private var thumbnail: UIImage?
+    @State private var analysisMode = AnalysisMode.cloud
+
+    private enum AnalysisMode: String, CaseIterable, Identifiable {
+        case cloud, local
+        var id: String { rawValue }
+        var title: String { self == .cloud ? "云端原视频" : "本地隐私" }
+    }
 
     var body: some View {
         ZStack {
@@ -18,6 +26,7 @@ struct NewReviewView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
+                    if localEvidence.isWorking { localEvidenceCard }
                     if uploads.hasActiveUpload {
                         ActiveUploadEntryCard(onShowTasks: onShowTasks)
                     }
@@ -46,6 +55,7 @@ struct NewReviewView: View {
         .task {
             try? await UNUserNotificationCenter.current()
                 .requestAuthorization(options: [.alert, .sound, .badge])
+            localEvidence.resumePendingUpload()
         }
     }
 
@@ -58,7 +68,7 @@ struct NewReviewView: View {
             Text("新建训练复盘")
                 .font(.system(size: 34, weight: .bold, design: .rounded))
                 .foregroundStyle(ACETheme.ink)
-            Text("最多可同时提交两个视频；原视频上传完成后由云端继续分析。")
+            Text("选择云端原视频，或仅提交设备端提取的关键动作画面。")
                 .foregroundStyle(ACETheme.muted)
         }
         .padding(.top, 20)
@@ -119,6 +129,15 @@ struct NewReviewView: View {
             Text("本次训练")
                 .font(.title3.bold())
                 .foregroundStyle(ACETheme.ink)
+            Picker("分析方式", selection: $analysisMode) {
+                ForEach(AnalysisMode.allCases) { mode in Text(mode.title).tag(mode) }
+            }
+            .pickerStyle(.segmented)
+            Text(analysisMode == .cloud
+                 ? "上传原视频后在云端完成完整分析。"
+                 : "视频仅在本机提取关键动作画面，原视频不会上传。")
+                .font(.caption)
+                .foregroundStyle(ACETheme.muted)
             field("训练主题（选填）", text: $title)
             field("学员称呼（选填）", text: $player)
             VStack(alignment: .leading, spacing: 8) {
@@ -134,12 +153,11 @@ struct NewReviewView: View {
             }
             Button {
                 guard let selectedAsset else { return }
-                uploads.begin(
-                    asset: selectedAsset,
-                    title: title,
-                    player: player,
-                    notes: notes
-                )
+                if analysisMode == .cloud {
+                    uploads.begin(asset: selectedAsset, title: title, player: player, notes: notes)
+                } else {
+                    localEvidence.begin(asset: selectedAsset, title: title, player: player, notes: notes)
+                }
                 title = ""
                 player = ""
                 notes = ""
@@ -148,14 +166,35 @@ struct NewReviewView: View {
                 onShowTasks()
             } label: {
                 PrimaryActionLabel(
-                    title: "提交并开始分析",
+                    title: analysisMode == .cloud ? "提交原视频并分析" : "设备端提取后分析",
                     systemImage: "arrow.up.circle.fill"
                 )
             }
             .buttonStyle(PrimaryButtonStyle())
-            .disabled(selectedAsset == nil)
+            .disabled(selectedAsset == nil || localEvidence.isWorking)
         }
         .aceCard()
+    }
+
+    private var localEvidenceCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                ProgressView().tint(ACETheme.lime)
+                Text("本地隐私分析").font(.headline)
+                Spacer()
+                Text("\(Int(localEvidence.progress * 100))%")
+                    .font(.caption.bold())
+            }
+            Text(localEvidence.message).font(.subheadline).foregroundStyle(.white.opacity(0.8))
+            ProgressView(value: localEvidence.progress).tint(ACETheme.lime)
+            if !localEvidence.errorMessage.isEmpty {
+                Text(localEvidence.errorMessage).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .padding(18)
+        .foregroundStyle(.white)
+        .background(ACETheme.ink)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
     private func field(_ label: String, text: Binding<String>) -> some View {

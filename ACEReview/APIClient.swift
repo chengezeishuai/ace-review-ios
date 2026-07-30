@@ -139,6 +139,38 @@ final class APIClient {
         )
     }
 
+    func createEvidence(
+        title: String, player: String, notes: String,
+        durationSeconds: TimeInterval, frameCount: Int
+    ) async throws -> TaskEnvelope {
+        try await request("api/app/evidence", method: "POST", body: [
+            "title": title, "player": player, "notes": notes,
+            "duration_seconds": durationSeconds, "frame_count": frameCount
+        ])
+    }
+
+    func uploadEvidenceFrame(taskID: String, index: Int, data: Data) async throws {
+        var request = URLRequest(url: url(for: "api/app/evidence/\(taskID)/frames/\(index)"))
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 60
+        request.httpBody = data
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        if let token = KeychainStore.get("accessToken") {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let detail = (try? decoder.decode(APIErrorBody.self, from: responseData).detail) ?? "证据帧上传失败"
+            throw APIClientError.server(detail)
+        }
+    }
+
+    func finalizeEvidence(taskID: String, durationSeconds: TimeInterval, frameCount: Int) async throws -> TaskEnvelope {
+        try await request("api/app/evidence/\(taskID)/finalize", method: "POST", body: [
+            "duration_seconds": durationSeconds, "frame_count": frameCount
+        ])
+    }
+
     func download(path: String) async throws -> URL {
         var request = URLRequest(url: url(for: path))
         if let token = KeychainStore.get("accessToken") {
