@@ -3,6 +3,9 @@ import SwiftUI
 struct ProfileView: View {
     @EnvironmentObject private var session: SessionStore
     @State private var showLogout = false
+    @State private var memberships: [MembershipItem] = []
+    @State private var entitlements: [EntitlementItem] = []
+    @State private var loadError = ""
 
     var body: some View {
         ZStack {
@@ -33,13 +36,61 @@ struct ProfileView: View {
                             Text(session.username)
                                 .font(.title3.bold())
                                 .foregroundStyle(ACETheme.ink)
-                            Text("个人训练空间")
+                            Text(memberships.isEmpty ? "个人训练空间" : "多身份训练空间")
                                 .font(.subheadline)
                                 .foregroundStyle(ACETheme.muted)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .aceCard()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("分析额度")
+                            .font(.headline)
+                        if entitlements.isEmpty {
+                            Text("当前没有可用额度，请联系平台管理员开通套餐。")
+                                .font(.subheadline)
+                                .foregroundStyle(ACETheme.muted)
+                        } else {
+                            ForEach(entitlements) { item in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(planName(item.planCode)).font(.subheadline.bold())
+                                        if let owner = item.ownerName, owner != "个人" {
+                                            Text(owner).font(.caption).foregroundStyle(ACETheme.muted)
+                                        }
+                                    }
+                                    Spacer()
+                                    Text("云端 \(item.cloudRemaining) · 本地 \(item.localRemaining)")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(ACETheme.green)
+                                }
+                                if item.id != entitlements.last?.id { Divider() }
+                            }
+                        }
+                    }
+                    .aceCard()
+
+                    if !memberships.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("我的组织与身份").font(.headline)
+                            ForEach(memberships) { item in
+                                HStack {
+                                    Image(systemName: "person.2.fill").foregroundStyle(ACETheme.green)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(item.name).font(.subheadline.bold())
+                                        Text(roleName(item.roleCode)).font(.caption).foregroundStyle(ACETheme.muted)
+                                    }
+                                    Spacer()
+                                }
+                            }
+                        }
+                        .aceCard()
+                    }
+
+                    if !loadError.isEmpty {
+                        Text(loadError).font(.caption).foregroundStyle(.red)
+                    }
 
                     VStack(spacing: 0) {
                         Button(role: .destructive) {
@@ -55,6 +106,7 @@ struct ProfileView: View {
             }
         }
         .navigationBarHidden(true)
+        .task { await loadAccount() }
         .confirmationDialog(
             "确认退出当前账号？",
             isPresented: $showLogout,
@@ -83,5 +135,25 @@ struct ProfileView: View {
         }
         .foregroundStyle(ACETheme.ink)
         .contentShape(Rectangle())
+    }
+
+    private func loadAccount() async {
+        do {
+            async let membershipRequest = APIClient.shared.memberships()
+            async let entitlementRequest = APIClient.shared.entitlements()
+            let (membershipResponse, entitlementResponse) = try await (membershipRequest, entitlementRequest)
+            memberships = membershipResponse.memberships
+            entitlements = entitlementResponse.entitlements
+        } catch {
+            loadError = "账户权益暂时无法加载"
+        }
+    }
+
+    private func planName(_ code: String) -> String {
+        ["trial": "体验包", "personal": "ACE 个人", "plus": "ACE Plus", "coach": "教练版", "club": "俱乐部版"][code] ?? code
+    }
+
+    private func roleName(_ code: String) -> String {
+        ["athlete": "学员", "coach": "教练", "parent": "家长", "agent": "代理商", "club_admin": "俱乐部管理员", "region_admin": "区域管理员", "team_admin": "校队管理员", "club_operator": "俱乐部运营"][code] ?? code
     }
 }

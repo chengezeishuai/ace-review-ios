@@ -77,6 +77,14 @@ final class APIClient {
         try await request("api/tasks")
     }
 
+    func memberships() async throws -> MembershipEnvelope {
+        try await request("api/account/memberships")
+    }
+
+    func entitlements() async throws -> EntitlementEnvelope {
+        try await request("api/account/entitlements")
+    }
+
     func task(id: String) async throws -> TaskItem {
         try await request("api/tasks/\(id)")
     }
