@@ -13,10 +13,23 @@ enum ACETheme {
 
 final class AppSettings {
     static let shared = AppSettings()
-    let baseURL = URL(string: "http://36.140.125.194:19080/prod-api/")!
+    let baseURL: URL
     // Matches the RuoYi mobile client registration.
     let clientID = "e5cd7e4891bf95d1d19206ce24a7b32e"
-    private init() {}
+    private init() {
+        guard let rawURL = Bundle.main.object(forInfoDictionaryKey: "ACEAPIBaseURL") as? String,
+              let url = URL(string: rawURL),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme) else {
+            preconditionFailure("ACE API address is not configured")
+        }
+#if !DEBUG
+        guard scheme == "https" else {
+            preconditionFailure("Release builds require an HTTPS ACE API address")
+        }
+#endif
+        baseURL = url
+    }
 }
 
 struct PrimaryButtonStyle: ButtonStyle {

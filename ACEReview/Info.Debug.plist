@@ -28,6 +28,11 @@
 	<string>ACE 需要读取你选择的训练视频，以便在后台上传并生成复盘报告。</string>
 	<key>NSUserNotificationUsageDescription</key>
 	<string>视频提交完成或复盘报告生成后通知你。</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
