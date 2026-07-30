@@ -123,6 +123,16 @@ struct EntitlementItem: Decodable, Identifiable {
 
 struct EntitlementEnvelope: Decodable { let entitlements: [EntitlementItem] }
 
+struct CoachComment: Decodable, Identifiable {
+    let id: String
+    let content: String
+    let authorName: String
+    let createdAt: String
+    enum CodingKeys: String, CodingKey { case id, content; case authorName = "author_name"; case createdAt = "created_at" }
+}
+
+struct CoachCommentEnvelope: Decodable { let comments: [CoachComment] }
+
 struct UploadManifest: Codable {
     let taskID: String
     let assetIdentifier: String

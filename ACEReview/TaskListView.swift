@@ -11,6 +11,7 @@ struct TaskListView: View {
     @State private var deleteTask: TaskItem?
     @State private var renameTask: TaskItem?
     @State private var renameTitle = ""
+    @State private var collaborationTask: TaskItem?
 
     var body: some View {
         ZStack {
@@ -76,6 +77,9 @@ struct TaskListView: View {
             Button("取消", role: .cancel) { deleteTask = nil }
         } message: {
             Text("原始视频和分析结果都会从当前账号中移除。")
+        }
+        .sheet(item: $collaborationTask) { task in
+            CollaborationSheet(task: task)
         }
         .alert(
             "重命名训练",
@@ -164,6 +168,7 @@ struct TaskListView: View {
                     openPDF: { openPDF(task) },
                     openHTML: { openHTML(task) },
                     openRally: { openRally(task) },
+                    collaborate: { collaborationTask = task },
                     retry: { Task { await taskStore.retry(task) } },
                     reanalyze: { reanalyzeTask = task },
                     rename: {
@@ -198,6 +203,61 @@ struct TaskListView: View {
     }
 }
 
+private struct CollaborationSheet: View {
+    let task: TaskItem
+    @Environment(\.dismiss) private var dismiss
+    @State private var comments: [CoachComment] = []
+    @State private var draft = ""
+    @State private var isSending = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("教练点评") {
+                    if comments.isEmpty {
+                        Text("暂时还没有点评").foregroundStyle(ACETheme.muted)
+                    }
+                    ForEach(comments) { comment in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(comment.authorName).font(.caption.bold()).foregroundStyle(ACETheme.green)
+                            Text(comment.content).font(.body)
+                            Text(comment.createdAt).font(.caption2).foregroundStyle(ACETheme.muted)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                Section("新增点评") {
+                    TextEditor(text: $draft).frame(minHeight: 94)
+                    if !errorMessage.isEmpty { Text(errorMessage).font(.caption).foregroundStyle(.red) }
+                    Button(isSending ? "正在提交" : "提交点评") { send() }
+                        .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                }
+            }
+            .navigationTitle("报告讨论")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        do { comments = try await APIClient.shared.comments(taskID: task.id).comments }
+        catch { errorMessage = "讨论内容暂时无法加载" }
+    }
+
+    private func send() {
+        isSending = true; errorMessage = ""
+        Task {
+            do {
+                try await APIClient.shared.addComment(taskID: task.id, content: draft)
+                draft = ""; await load()
+            } catch { errorMessage = error.localizedDescription }
+            isSending = false
+        }
+    }
+}
+
 private struct TaskCard: View {
     @EnvironmentObject private var uploads: UploadManager
     let task: TaskItem
@@ -205,6 +265,7 @@ private struct TaskCard: View {
     let openPDF: () -> Void
     let openHTML: () -> Void
     let openRally: () -> Void
+    let collaborate: () -> Void
     let retry: () -> Void
     let reanalyze: () -> Void
     let rename: () -> Void
@@ -238,6 +299,9 @@ private struct TaskCard: View {
                 activeStatus
             } else if task.isComplete {
                 reportButtons
+                Button(action: collaborate) {
+                    actionLabel("报告讨论", icon: "bubble.left.and.bubble.right")
+                }
                 Button(action: reanalyze) {
                     actionLabel("按重点重新分析", icon: "scope")
                 }
