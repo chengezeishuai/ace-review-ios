@@ -20,16 +20,7 @@ struct CommerceView: View {
                     if isLoading {
                         ProgressView().frame(maxWidth: .infinity).padding(.vertical, 40)
                     } else if products.isEmpty {
-                        ContentUnavailableView(
-                            "暂未开放服务",
-                            systemImage: "creditcard",
-                            description: Text("当前账号没有可购买的套餐，请稍后重试。")
-                        ) {
-                            Button("重新加载") { Task { await load() } }
-                                .buttonStyle(.bordered)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 38)
+                        emptyCatalog
                     } else {
                         ForEach(products) { product in
                             VStack(alignment: .leading, spacing: 11) {
@@ -85,6 +76,22 @@ struct CommerceView: View {
             products = []
             errorMessage = error.localizedDescription
         }
+    }
+
+    private var emptyCatalog: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "creditcard")
+                .font(.system(size: 30))
+                .foregroundStyle(ACETheme.green)
+            Text("暂未开放服务").font(.headline)
+            Text("当前账号没有可购买的套餐，请稍后重试。")
+                .font(.subheadline)
+                .foregroundStyle(ACETheme.muted)
+            Button("重新加载") { Task { await load() } }
+                .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 38)
     }
 
     private func purchase(_ product: CommerceProduct) async {
