@@ -101,7 +101,7 @@ final class LocalEvidenceManager: ObservableObject {
         }
     }
 
-    private static func extractFrames(from url: URL) throws -> (directory: URL, duration: Double, frameCount: Int) {
+    nonisolated private static func extractFrames(from url: URL) throws -> (directory: URL, duration: Double, frameCount: Int) {
         let asset = AVURLAsset(url: url)
         let duration = CMTimeGetSeconds(asset.duration)
         guard duration.isFinite, duration > 1 else { throw APIClientError.server("视频时长不足，无法进行本地分析") }
@@ -123,7 +123,7 @@ final class LocalEvidenceManager: ObservableObject {
         return (directory, duration, count)
     }
 
-    private static func evidenceRoot() throws -> URL {
+    nonisolated private static func evidenceRoot() throws -> URL {
         let root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                 appropriateFor: nil, create: true)
             .appendingPathComponent("ACEEvidence", isDirectory: true)
