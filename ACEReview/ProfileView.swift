@@ -5,6 +5,7 @@ struct ProfileView: View {
     @State private var showLogout = false
     @State private var memberships: [MembershipItem] = []
     @State private var entitlements: [EntitlementItem] = []
+    @State private var trainingPlans: [TrainingPlan] = []
     @State private var loadError = ""
 
     var body: some View {
@@ -88,6 +89,27 @@ struct ProfileView: View {
                         .aceCard()
                     }
 
+                    if !trainingPlans.isEmpty {
+                        VStack(alignment: .leading, spacing: 13) {
+                            Text("训练计划").font(.headline)
+                            ForEach(trainingPlans) { plan in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(plan.title).font(.subheadline.bold())
+                                    if !plan.goal.isEmpty {
+                                        Text(plan.goal).font(.caption).foregroundStyle(ACETheme.muted)
+                                    }
+                                    ForEach(plan.items.prefix(3), id: \.self) { item in
+                                        Label(item, systemImage: "checkmark.circle")
+                                            .font(.caption)
+                                            .foregroundStyle(ACETheme.green)
+                                    }
+                                }
+                                if plan.id != trainingPlans.last?.id { Divider() }
+                            }
+                        }
+                        .aceCard()
+                    }
+
                     if !loadError.isEmpty {
                         Text(loadError).font(.caption).foregroundStyle(.red)
                     }
@@ -141,9 +163,11 @@ struct ProfileView: View {
         do {
             async let membershipRequest = APIClient.shared.memberships()
             async let entitlementRequest = APIClient.shared.entitlements()
-            let (membershipResponse, entitlementResponse) = try await (membershipRequest, entitlementRequest)
+            async let plansRequest = APIClient.shared.trainingPlans()
+            let (membershipResponse, entitlementResponse, plansResponse) = try await (membershipRequest, entitlementRequest, plansRequest)
             memberships = membershipResponse.memberships
             entitlements = entitlementResponse.entitlements
+            trainingPlans = plansResponse.plans
         } catch {
             loadError = "账户权益暂时无法加载"
         }

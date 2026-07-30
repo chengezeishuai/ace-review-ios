@@ -133,6 +133,27 @@ struct CoachComment: Decodable, Identifiable {
 
 struct CoachCommentEnvelope: Decodable { let comments: [CoachComment] }
 
+struct TrainingPlan: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let goal: String
+    let status: String
+    let startsOn: String?
+    let endsOn: String?
+    let itemsJSON: String
+    enum CodingKeys: String, CodingKey {
+        case id, title, goal, status
+        case startsOn = "starts_on"
+        case endsOn = "ends_on"
+        case itemsJSON = "items_json"
+    }
+    var items: [String] {
+        (try? JSONDecoder().decode([String].self, from: Data(itemsJSON.utf8))) ?? []
+    }
+}
+
+struct TrainingPlanEnvelope: Decodable { let plans: [TrainingPlan] }
+
 struct UploadManifest: Codable {
     let taskID: String
     let assetIdentifier: String

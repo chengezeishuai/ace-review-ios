@@ -97,6 +97,10 @@ final class APIClient {
         let _: EmptyResponse = try await request("api/tasks/\(taskID)/comments", method: "POST", body: ["content": content])
     }
 
+    func trainingPlans() async throws -> TrainingPlanEnvelope {
+        try await request("api/training-plans")
+    }
+
     func retryTask(id: String) async throws -> TaskEnvelope {
         try await request(
             "api/tasks/\(id)/retry",
