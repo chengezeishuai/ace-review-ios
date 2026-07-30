@@ -245,11 +245,11 @@ private final class UploadSlot: NSObject, ObservableObject {
                     importFinished: false,
                     finalizeScheduled: false
                 )
-                self.lock.lock()
-                self.manifest = newManifest
-                self.persistManifestUnlocked()
-                self.lock.unlock()
                 self.publish {
+                    self.lock.lock()
+                    self.manifest = newManifest
+                    self.persistManifestUnlocked()
+                    self.lock.unlock()
                     self.activeTaskID = response.task.id
                 }
                 self.startReading(
@@ -921,10 +921,10 @@ final class UploadManager: ObservableObject {
             self.stopPreparationProgress()
             try? FileManager.default.removeItem(at: self.directoryForExistingTask(taskID))
             try? FileManager.default.removeItem(at: self.manifestURL)
-            self.lock.lock()
-            self.manifest = nil
-            self.lock.unlock()
             self.publish {
+                self.lock.lock()
+                self.manifest = nil
+                self.lock.unlock()
                 self.hasActiveUpload = false
                 self.activeTaskID = nil
                 self.lastError = ""
