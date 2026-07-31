@@ -283,7 +283,7 @@ private struct ReviewReportView: View {
                         .background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 VStack(spacing: 10) {
-                    if let videoURL = task.videoURL {
+                    if task.videoURL != nil {
                         Button { showVideo = true } label: {
                             Label("查看训练视频", systemImage: "play.rectangle.fill").frame(maxWidth: .infinity)
                         }.buttonStyle(PrimaryButtonStyle())

@@ -196,7 +196,7 @@ struct NewReviewView: View {
         VStack(spacing: 6) {
             Image(systemName: complete ? "checkmark.circle.fill" : active ? "arrow.triangle.2.circlepath.circle.fill" : "circle")
                 .foregroundStyle(complete || active ? ACETheme.green : ACETheme.line)
-                .symbolEffect(.rotate, options: .repeating, isActive: active)
+                .symbolEffect(.pulse, options: .repeating, isActive: active)
             Text(title).font(.caption2).foregroundStyle(active || complete ? ACETheme.ink : ACETheme.muted)
         }
         .frame(maxWidth: .infinity)
@@ -222,11 +222,11 @@ struct NewReviewView: View {
                 }
                 Section {
                     Button(isSubmitting ? "正在创建任务..." : "开始云端分析") {
-                        guard let selectedAsset else { return }
+                        guard let asset = selectedAsset else { return }
                         isSubmitting = true
                         uploadError = ""
                         uploads.begin(
-                            asset: selectedAsset,
+                            asset: asset,
                             title: title,
                             player: player,
                             notes: notes,
