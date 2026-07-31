@@ -793,12 +793,36 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
         totalBytesSent: Int64,
         totalBytesExpectedToSend: Int64
     ) {
-        guard task.taskDescription?.hasPrefix("part|") == true else { return }
+        guard let description = task.taskDescription,
+              description.hasPrefix("part|") else { return }
+        let fields = description.split(
+            separator: "|",
+            maxSplits: 3,
+            omittingEmptySubsequences: false
+        ).map(String.init)
+        guard fields.count == 4, let index = Int(fields[2]) else { return }
+        lock.lock()
+        let totalBytes = manifest?.totalBytes ?? 0
+        let partSize = manifest?.partSize ?? 0
+        let completedParts = manifest?.completedParts ?? []
+        let completedBytes = completedParts.reduce(Int64(0)) { partial, completedIndex in
+            let start = Int64(completedIndex * partSize)
+            return partial + min(Int64(partSize), max(0, totalBytes - start))
+        }
+        lock.unlock()
         publish {
             self.snapshot.phase = .uploading
             self.snapshot.message = self.snapshot.isShowingPreparation
                 ? Self.preparationMessage
                 : Self.uploadMessage
+            guard totalBytes > 0 else { return }
+            let currentPartStart = Int64(index * partSize)
+            let currentPartCapacity = min(
+                Int64(partSize),
+                max(0, totalBytes - currentPartStart)
+            )
+            let transmitted = min(totalBytesSent, currentPartCapacity)
+            self.snapshot.bytesUploaded = min(totalBytes, completedBytes + transmitted)
         }
     }
 

@@ -127,7 +127,10 @@ struct TaskListView: View {
     }
 
     private func uploadProgress(_ snapshot: UploadSnapshot) -> Double {
-        if snapshot.totalBytes > 0 { return Double(snapshot.bytesUploaded) / Double(snapshot.totalBytes) * 100 }
+        if snapshot.totalBytes > 0 {
+            let value = Double(snapshot.bytesUploaded) / Double(snapshot.totalBytes) * 100
+            return snapshot.phase == .failed ? min(99, value) : value
+        }
         return Double(snapshot.preparationPercent)
     }
 
@@ -193,7 +196,10 @@ private struct LibraryTaskRow: View {
     private var statusColor: Color { task.isComplete ? ACETheme.green : task.status == "failed" ? .red : ACETheme.green.opacity(0.85) }
     private var displayedProgress: Double {
         guard let localUpload else { return Double(task.progress) }
-        if localUpload.totalBytes > 0 { return Double(localUpload.bytesUploaded) / Double(localUpload.totalBytes) * 100 }
+        if localUpload.totalBytes > 0 {
+            let value = Double(localUpload.bytesUploaded) / Double(localUpload.totalBytes) * 100
+            return localUpload.phase == .failed ? min(99, value) : value
+        }
         return Double(localUpload.preparationPercent)
     }
     private var displayMessage: String {
@@ -244,7 +250,10 @@ private struct TaskProgressView: View {
     private var localUpload: UploadSnapshot? { uploads.snapshot(for: currentTask.id) }
     private var displayedProgress: Double {
         guard let localUpload else { return Double(currentTask.progress) }
-        if localUpload.totalBytes > 0 { return Double(localUpload.bytesUploaded) / Double(localUpload.totalBytes) * 100 }
+        if localUpload.totalBytes > 0 {
+            let value = Double(localUpload.bytesUploaded) / Double(localUpload.totalBytes) * 100
+            return localUpload.phase == .failed ? min(99, value) : value
+        }
         return Double(localUpload.preparationPercent)
     }
     private var progressTitle: String {

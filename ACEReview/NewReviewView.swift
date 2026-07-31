@@ -263,7 +263,10 @@ struct NewReviewView: View {
     }
 
     private func progress(for snapshot: UploadSnapshot) -> Double {
-        if snapshot.totalBytes > 0 { return Double(snapshot.bytesUploaded) / Double(snapshot.totalBytes) * 100 }
+        if snapshot.totalBytes > 0 {
+            let value = Double(snapshot.bytesUploaded) / Double(snapshot.totalBytes) * 100
+            return snapshot.phase == .failed ? min(99, value) : value
+        }
         return Double(snapshot.preparationPercent)
     }
 
