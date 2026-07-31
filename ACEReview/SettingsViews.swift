@@ -143,7 +143,7 @@ final class MediaBackupService: ObservableObject {
         } else {
             options.predicate = NSPredicate(
                 format: "mediaType == %d OR mediaType == %d",
-                PHAssetMediaType.photo.rawValue,
+                PHAssetMediaType.image.rawValue,
                 PHAssetMediaType.video.rawValue
             )
         }
