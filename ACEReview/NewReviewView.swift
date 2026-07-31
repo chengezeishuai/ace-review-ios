@@ -29,12 +29,13 @@ struct NewReviewView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
+                    creditDeck
                     if localEvidence.isWorking { localEvidenceCard }
                     if uploads.hasActiveUpload {
                         ActiveUploadEntryCard(onShowTasks: onShowTasks)
                     }
                     if uploads.canStartUpload {
-                        videoCard
+                        modeChoices
                         detailsCard
                     } else {
                         Text("已有两个视频正在提交，请等待其中一个完成后继续。")
@@ -65,18 +66,92 @@ struct NewReviewView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("ACE 复盘")
-                .font(.system(size: 11, weight: .bold))
-                .tracking(2.3)
-                .foregroundStyle(ACETheme.green)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    ACEBrandMark(size: 28)
+                    Text("ACE 复盘")
+                        .font(.system(size: 14, weight: .bold, design: .serif))
+                        .foregroundStyle(ACETheme.green)
+                }
             Text("新建训练复盘")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundStyle(ACETheme.ink)
             Text("选择云端原视频，或仅提交设备端提取的关键动作画面。")
                 .foregroundStyle(ACETheme.muted)
+            }
+            Spacer()
+            Image(systemName: "bell")
+                .font(.title3)
+                .foregroundStyle(ACETheme.ink)
+                .padding(10)
+                .background(ACETheme.paper)
+                .clipShape(Circle())
         }
         .padding(.top, 20)
+    }
+
+    private var creditDeck: some View {
+        HStack(spacing: 0) {
+            creditCell(title: "云端额度", value: cloudCredits, icon: "cloud")
+            Divider().frame(height: 54)
+            creditCell(title: "本地额度", value: localCredits, icon: "iphone")
+        }
+        .aceCard()
+    }
+
+    private func creditCell(title: String, value: Int, icon: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(ACETheme.green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.caption).foregroundStyle(ACETheme.muted)
+                Text(isLoadingCredits ? "--" : "\(value) 次")
+                    .font(.title3.bold())
+                    .foregroundStyle(ACETheme.ink)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var modeChoices: some View {
+        HStack(spacing: 12) {
+            modeCard(
+                mode: .cloud,
+                title: "云端智能分析",
+                detail: "完整视频与战术报告",
+                icon: "cloud.sun"
+            )
+            modeCard(
+                mode: .local,
+                title: "本地隐私分析",
+                detail: "原视频保留在设备",
+                icon: "iphone"
+            )
+        }
+    }
+
+    private func modeCard(mode: AnalysisMode, title: String, detail: String, icon: String) -> some View {
+        Button { analysisMode = mode } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(analysisMode == mode ? .white : ACETheme.green)
+                Text(title).font(.subheadline.bold())
+                Text(detail).font(.caption).multilineTextAlignment(.leading)
+            }
+            .foregroundStyle(analysisMode == mode ? .white : ACETheme.ink)
+            .frame(maxWidth: .infinity, minHeight: 126, alignment: .leading)
+            .padding(18)
+            .background(analysisMode == mode ? ACETheme.green : ACETheme.paper)
+            .overlay {
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(analysisMode == mode ? ACETheme.green : ACETheme.line, lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var videoCard: some View {
@@ -88,10 +163,10 @@ struct NewReviewView: View {
                     .frame(height: 205)
                     .frame(maxWidth: .infinity)
                     .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             } else {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .fill(LinearGradient(colors: [ACETheme.green.opacity(0.13), ACETheme.lime.opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing))
                     VStack(spacing: 13) {
                         Image(systemName: "video.badge.plus")
@@ -126,44 +201,29 @@ struct NewReviewView: View {
                 .buttonStyle(PrimaryButtonStyle())
             }
         }
-        .aceCard()
     }
 
     private var detailsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("本次训练")
+            Text(selectedAsset == nil ? "选择训练视频" : "补充训练信息")
                 .font(.title3.bold())
                 .foregroundStyle(ACETheme.ink)
-            Picker("分析方式", selection: $analysisMode) {
-                ForEach(AnalysisMode.allCases) { mode in Text(mode.title).tag(mode) }
-            }
-            .pickerStyle(.segmented)
-            HStack(spacing: 12) {
-                Image(analysisMode == .cloud ? "CloudAnalysis" : "LocalAnalysis")
-                    .resizable().scaledToFill().frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 9))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(analysisMode == .cloud ? "云端智能分析" : "本地隐私分析").font(.headline)
-                    Text(analysisMode == .cloud ? "保留完整视频证据，获得更完整的战术报告" : "原视频留在设备，只上传动作证据").font(.caption).foregroundStyle(ACETheme.muted)
+            videoCard
+            if selectedAsset != nil {
+                creditSummary
+                field("训练主题（选填）", text: $title)
+                field("学员称呼（选填）", text: $player)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("想重点看看（选填）")
+                        .font(.caption.bold())
+                        .foregroundStyle(ACETheme.muted)
+                    TextEditor(text: $notes)
+                        .frame(minHeight: 90)
+                        .padding(10)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
-            }
-            Text(analysisMode == .cloud
-                 ? "上传原视频后在云端完成完整分析。"
-                 : "视频仅在本机提取关键动作画面，原视频不会上传。")
-                .font(.caption)
-                .foregroundStyle(ACETheme.muted)
-            creditSummary
-            field("训练主题（选填）", text: $title)
-            field("学员称呼（选填）", text: $player)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("想重点看看（选填）")
-                    .font(.caption.bold())
-                    .foregroundStyle(ACETheme.muted)
-                TextEditor(text: $notes)
-                    .frame(minHeight: 90)
-                    .padding(10)
-                    .scrollContentBackground(.hidden)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 13))
             }
             Button {
                 guard let selectedAsset else { return }
@@ -236,6 +296,9 @@ struct NewReviewView: View {
             total + (analysisMode == .cloud ? item.cloudRemaining : item.localRemaining)
         }
     }
+
+    private var cloudCredits: Int { entitlements.reduce(0) { $0 + $1.cloudRemaining } }
+    private var localCredits: Int { entitlements.reduce(0) { $0 + $1.localRemaining } }
 
     private var hasNoUsableCredits: Bool {
         !isLoadingCredits && creditLoadError.isEmpty && availableCredits <= 0

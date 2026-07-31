@@ -31,6 +31,7 @@ struct TaskItem: Identifiable, Decodable {
     let originalName: String
     let sizeBytes: Int64
     let uploadedBytes: Int64
+    let analysisMode: String?
     let status: String
     let stage: String
     let progress: Int
@@ -43,6 +44,7 @@ struct TaskItem: Identifiable, Decodable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, player, status, stage, progress
+        case analysisMode = "analysis_mode"
         case originalName = "original_name"
         case sizeBytes = "size_bytes"
         case uploadedBytes = "uploaded_bytes"
@@ -67,6 +69,27 @@ struct TaskItem: Identifiable, Decodable {
 
 struct TaskEnvelope: Decodable {
     let task: TaskItem
+}
+
+struct ReportMetric: Decodable, Identifiable {
+    let label: String
+    let value: String
+    var id: String { label }
+}
+
+struct ReportSummary: Decodable {
+    let taskID: String
+    let reportAvailable: Bool
+    let analysisMode: String
+    let summary: String
+    let metrics: [ReportMetric]
+
+    enum CodingKeys: String, CodingKey {
+        case taskID = "task_id"
+        case reportAvailable = "report_available"
+        case analysisMode = "analysis_mode"
+        case summary, metrics
+    }
 }
 
 struct EvidenceCreateResponse: Decodable {

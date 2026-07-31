@@ -14,13 +14,15 @@ struct ProfileView: View {
             ACETheme.cream.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("个人中心")
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(2.3)
-                            .foregroundStyle(ACETheme.green)
-                        Text("我的")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                    HStack {
+                        HStack(spacing: 8) {
+                            ACEBrandMark(size: 28)
+                            Text("ACE 复盘")
+                                .font(.system(size: 14, weight: .bold, design: .serif))
+                                .foregroundStyle(ACETheme.green)
+                        }
+                        Spacer()
+                        Image(systemName: "gearshape")
                             .foregroundStyle(ACETheme.ink)
                     }
                     .padding(.top, 18)
@@ -58,27 +60,16 @@ struct ProfileView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("分析额度")
+                        Text("可用额度")
                             .font(.headline)
                         if entitlements.isEmpty {
                             Text("当前没有可用额度，请联系平台管理员开通套餐。")
                                 .font(.subheadline)
                                 .foregroundStyle(ACETheme.muted)
                         } else {
-                            ForEach(entitlements) { item in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(planName(item.planCode)).font(.subheadline.bold())
-                                        if let owner = item.ownerName, owner != "个人" {
-                                            Text(owner).font(.caption).foregroundStyle(ACETheme.muted)
-                                        }
-                                    }
-                                    Spacer()
-                                    Text("云端 \(item.cloudRemaining) · 本地 \(item.localRemaining)")
-                                        .font(.caption.bold())
-                                        .foregroundStyle(ACETheme.green)
-                                }
-                                if item.id != entitlements.last?.id { Divider() }
+                            HStack(spacing: 12) {
+                                creditTile("云端分析", value: entitlements.reduce(0) { $0 + $1.cloudRemaining }, icon: "cloud")
+                                creditTile("本地分析", value: entitlements.reduce(0) { $0 + $1.localRemaining }, icon: "iphone")
                             }
                         }
                     }
@@ -87,7 +78,7 @@ struct ProfileView: View {
                     NavigationLink {
                         CommerceView()
                     } label: {
-                        settingsRow("订购服务与加次包", icon: "creditcard")
+                        settingsRow("服务套餐与加次包", icon: "creditcard")
                     }
                     .aceCard()
 
@@ -178,6 +169,18 @@ struct ProfileView: View {
         .contentShape(Rectangle())
     }
 
+    private func creditTile(_ title: String, value: Int, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Image(systemName: icon).foregroundStyle(ACETheme.green)
+            Text("\(value) 次").font(.title3.bold()).foregroundStyle(ACETheme.ink)
+            Text(title).font(.caption).foregroundStyle(ACETheme.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(ACETheme.green.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
     private func loadAccount() async {
         do {
             async let membershipRequest = APIClient.shared.memberships()
@@ -195,7 +198,7 @@ struct ProfileView: View {
     }
 
     private func planName(_ code: String) -> String {
-        ["trial": "体验包", "personal": "ACE 个人", "plus": "ACE Plus", "coach": "教练版", "club": "俱乐部版"][code] ?? code
+        ["trial": "体验套餐", "personal": "个人套餐", "plus": "进阶套餐", "coach": "教练套餐", "club": "俱乐部套餐"][code] ?? "服务套餐"
     }
 
     private func roleName(_ code: String) -> String {

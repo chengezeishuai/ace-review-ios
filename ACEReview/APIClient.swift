@@ -104,6 +104,10 @@ final class APIClient {
         try await request("api/app/tasks/\(id)")
     }
 
+    func reportSummary(taskID: String) async throws -> ReportSummary {
+        try await request("api/app/tasks/\(taskID)/report/summary")
+    }
+
     func comments(taskID: String) async throws -> CoachCommentEnvelope {
         try await request("api/app/tasks/\(taskID)/comments")
     }

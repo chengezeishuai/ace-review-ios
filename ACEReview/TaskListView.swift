@@ -12,6 +12,8 @@ struct TaskListView: View {
     @State private var renameTask: TaskItem?
     @State private var renameTitle = ""
     @State private var collaborationTask: TaskItem?
+    @State private var reportTask: TaskItem?
+    @State private var filter = TaskFilter.all
 
     var body: some View {
         ZStack {
@@ -27,6 +29,16 @@ struct TaskListView: View {
             .refreshable { await taskStore.load() }
         }
         .navigationBarHidden(true)
+        .navigationDestination(item: $reportTask) { task in
+            ReportDetailView(
+                task: task,
+                openPDF: { openPDF(task) },
+                openHTML: { openHTML(task) },
+                openRally: { openRally(task) },
+                collaborate: { collaborationTask = task },
+                reanalyze: { reanalyzeTask = task }
+            )
+        }
         .sheet(item: $preview) { file in
             NavigationStack {
                 QuickLookPreview(url: file.url)
@@ -127,14 +139,25 @@ struct TaskListView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("我的复盘")
-                .font(.system(size: 11, weight: .bold))
-                .tracking(2.3)
-                .foregroundStyle(ACETheme.green)
-            Text("训练复盘")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                HStack(spacing: 8) {
+                    ACEBrandMark(size: 28)
+                    Text("ACE 复盘")
+                        .font(.system(size: 14, weight: .bold, design: .serif))
+                        .foregroundStyle(ACETheme.green)
+                }
+                Spacer()
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(ACETheme.ink)
+            }
+            Text("任务库")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundStyle(ACETheme.ink)
+            Picker("任务状态", selection: $filter) {
+                ForEach(TaskFilter.allCases) { item in Text(item.title).tag(item) }
+            }
+            .pickerStyle(.segmented)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 18)
@@ -160,17 +183,17 @@ struct TaskListView: View {
                 description: Text("提交第一段训练录像后，进度会显示在这里。")
             )
             .padding(.top, 80)
+        } else if filteredTasks.isEmpty {
+            ContentUnavailableView("暂无此类任务", systemImage: "line.3.horizontal.decrease.circle", description: Text("切换筛选条件查看其它任务。"))
+                .padding(.top, 56)
         } else {
-            ForEach(taskStore.tasks) { task in
-                TaskCard(
+            ForEach(filteredTasks) { task in
+                TaskLibraryCard(
                     task: task,
                     isWorking: taskStore.workingTaskIDs.contains(task.id),
+                    openReport: { if task.isComplete { reportTask = task } },
                     openPDF: { openPDF(task) },
-                    openHTML: { openHTML(task) },
-                    openRally: { openRally(task) },
-                    collaborate: { collaborationTask = task },
                     retry: { Task { await taskStore.retry(task) } },
-                    reanalyze: { reanalyzeTask = task },
                     rename: {
                         renameTitle = task.title
                         renameTask = task
@@ -200,6 +223,266 @@ struct TaskListView: View {
     private func openRally(_ task: TaskItem) {
         guard let path = task.rallyURL else { return }
         webPage = WebPage(title: "Rally 回合", path: path)
+    }
+}
+
+private enum TaskFilter: String, CaseIterable, Identifiable {
+    case all, ready, processing, completed
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all: "全部"
+        case .ready: "待处理"
+        case .processing: "分析中"
+        case .completed: "已完成"
+        }
+    }
+
+    func matches(_ task: TaskItem) -> Bool {
+        switch self {
+        case .all: true
+        case .ready: ["uploading", "queued", "failed"].contains(task.status)
+        case .processing: task.status == "processing"
+        case .completed: task.isComplete
+        }
+    }
+}
+
+private struct TaskLibraryCard: View {
+    let task: TaskItem
+    let isWorking: Bool
+    let openReport: () -> Void
+    let openPDF: () -> Void
+    let retry: () -> Void
+    let rename: () -> Void
+    let delete: () -> Void
+
+    var body: some View {
+        Button(action: openReport) {
+            HStack(spacing: 13) {
+                taskVisual
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack {
+                        Text(task.title)
+                            .font(.headline)
+                            .foregroundStyle(ACETheme.ink)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        statusBadge
+                    }
+                    Text(task.player?.isEmpty == false ? task.player! : "训练复盘")
+                        .font(.caption)
+                        .foregroundStyle(ACETheme.muted)
+                        .lineLimit(1)
+                    if task.isActive {
+                        ProgressView(value: Double(task.progress), total: 100)
+                            .tint(ACETheme.green)
+                        Text("\(task.progress)% · \(stageName)")
+                            .font(.caption2)
+                            .foregroundStyle(ACETheme.muted)
+                    } else if task.isComplete {
+                        Text("报告已生成 · 点击查看详情")
+                            .font(.caption)
+                            .foregroundStyle(ACETheme.green)
+                    } else if task.status == "failed" {
+                        Text(task.failureReason)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .lineLimit(2)
+                    } else {
+                        Text(stageName).font(.caption).foregroundStyle(ACETheme.muted)
+                    }
+                }
+            }
+            .padding(16)
+            .background(ACETheme.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(ACETheme.line.opacity(0.8), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if task.isComplete, task.pdfURL != nil {
+                Button("下载 PDF 报告", systemImage: "arrow.down.doc") { openPDF() }
+            }
+            if task.status == "failed" {
+                Button("重新分析", systemImage: "arrow.clockwise", action: retry)
+                    .disabled(isWorking)
+            }
+            Button("重命名", systemImage: "pencil", action: rename)
+                .disabled(isWorking)
+            Button("删除任务", systemImage: "trash", role: .destructive, action: delete)
+                .disabled(isWorking)
+        }
+    }
+
+    private var taskVisual: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(task.isComplete ? ACETheme.green.opacity(0.12) : ACETheme.lime.opacity(0.18))
+            Image(systemName: task.isComplete ? "checkmark.circle.fill" : task.status == "failed" ? "exclamationmark.triangle.fill" : "figure.tennis")
+                .font(.title2)
+                .foregroundStyle(task.status == "failed" ? .red : ACETheme.green)
+        }
+        .frame(width: 60, height: 60)
+    }
+
+    private var statusBadge: some View {
+        Text(statusName)
+            .font(.caption2.bold())
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .foregroundStyle(task.isComplete ? ACETheme.green : ACETheme.ink)
+            .background(task.isComplete ? ACETheme.green.opacity(0.10) : ACETheme.lime.opacity(0.32))
+            .clipShape(Capsule())
+    }
+
+    private var statusName: String {
+        switch task.status {
+        case "completed": "已完成"
+        case "processing": "分析中"
+        case "queued": "等待分析"
+        case "uploading": "上传中"
+        case "failed": "需处理"
+        default: "已取消"
+        }
+    }
+
+    private var stageName: String {
+        let name = task.stage.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "正在准备" : name
+    }
+}
+
+private struct ReportDetailView: View {
+    let task: TaskItem
+    let openPDF: () -> Void
+    let openHTML: () -> Void
+    let openRally: () -> Void
+    let collaborate: () -> Void
+    let reanalyze: () -> Void
+    @State private var summary: ReportSummary?
+    @State private var loadError = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                scoreHeader
+                reportStatus
+                metricGrid
+                actions
+            }
+            .padding(18)
+            .padding(.bottom, 32)
+        }
+        .background(ACETheme.cream.ignoresSafeArea())
+        .navigationTitle("复盘报告")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            do { summary = try await APIClient.shared.reportSummary(taskID: task.id) }
+            catch { loadError = "报告摘要暂时无法加载，可直接查看完整报告。" }
+        }
+    }
+
+    private var scoreHeader: some View {
+        HStack(spacing: 18) {
+            ZStack {
+                Circle().stroke(ACETheme.line, lineWidth: 10)
+                Circle().trim(from: 0, to: 1).stroke(ACETheme.green, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                VStack(spacing: 2) {
+                    Text("已完成").font(.caption.bold()).foregroundStyle(ACETheme.green)
+                    Text("报告").font(.caption2).foregroundStyle(ACETheme.muted)
+                }
+            }
+            .frame(width: 94, height: 94)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(task.title).font(.title3.bold()).foregroundStyle(ACETheme.ink)
+                Text(task.player?.isEmpty == false ? task.player! : "训练复盘")
+                    .font(.subheadline).foregroundStyle(ACETheme.muted)
+                Label("分析已完成", systemImage: "checkmark.seal.fill")
+                    .font(.caption.bold()).foregroundStyle(ACETheme.green)
+            }
+            Spacer()
+        }
+        .aceCard()
+    }
+
+    private var reportStatus: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("报告摘要").font(.headline).foregroundStyle(ACETheme.ink)
+            Text(summary?.summary ?? (loadError.isEmpty ? "正在读取报告摘要…" : loadError))
+                .font(.subheadline).foregroundStyle(ACETheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .aceCard()
+    }
+
+    private var metricGrid: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let summary, !summary.metrics.isEmpty {
+                Text("技术指标").font(.headline).foregroundStyle(ACETheme.ink)
+                HStack(spacing: 10) {
+                    ForEach(summary.metrics.prefix(3)) { metric in
+                        reportMetric(title: metric.label, value: metric.value, icon: "chart.line.uptrend.xyaxis")
+                    }
+                }
+            } else {
+                HStack(spacing: 10) {
+                    reportMetric(title: "任务状态", value: "已完成", icon: "checkmark.circle")
+                    reportMetric(title: "分析进度", value: "100%", icon: "chart.line.uptrend.xyaxis")
+                    reportMetric(title: "分析模式", value: task.analysisMode == "device_evidence" ? "本地" : "云端", icon: "cloud")
+                }
+            }
+        }
+    }
+
+    private func reportMetric(title: String, value: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Image(systemName: icon).foregroundStyle(ACETheme.green)
+            Text(value).font(.headline).foregroundStyle(ACETheme.ink)
+            Text(title).font(.caption2).foregroundStyle(ACETheme.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(ACETheme.paper)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(ACETheme.line.opacity(0.75), lineWidth: 1) }
+    }
+
+    private var actions: some View {
+        VStack(spacing: 10) {
+            if task.reportURL != nil {
+                Button(action: openHTML) { PrimaryActionLabel(title: "查看完整报告", systemImage: "doc.text.image") }
+                    .buttonStyle(PrimaryButtonStyle())
+            }
+            if task.pdfURL != nil {
+                Button(action: openPDF) { secondaryAction("下载 PDF 报告", icon: "arrow.down.doc") }
+            }
+            if task.rallyURL != nil {
+                Button(action: openRally) { secondaryAction("查看训练回合", icon: "film.stack") }
+            }
+            Button(action: collaborate) { secondaryAction("报告讨论", icon: "bubble.left.and.bubble.right") }
+            Button(action: reanalyze) { secondaryAction("按重点重新分析", icon: "arrow.clockwise") }
+        }
+    }
+
+    private func secondaryAction(_ title: String, icon: String) -> some View {
+        HStack {
+            Image(systemName: icon)
+            Text(title)
+            Spacer()
+            Image(systemName: "chevron.right").font(.caption.bold())
+        }
+        .font(.subheadline.bold())
+        .foregroundStyle(ACETheme.green)
+        .padding(16)
+        .background(ACETheme.paper)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(ACETheme.line.opacity(0.75), lineWidth: 1) }
     }
 }
 
@@ -239,6 +522,10 @@ private struct CollaborationSheet: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
             .task { await load() }
         }
+    }
+
+    private var filteredTasks: [TaskItem] {
+        taskStore.tasks.filter { filter.matches($0) }
     }
 
     private func load() async {
