@@ -32,24 +32,25 @@ struct ACEBrandMark: View {
 final class AppSettings {
     static let shared = AppSettings()
     let baseURL: URL
+    let configurationError: String?
     // Matches the RuoYi mobile client registration.
     let clientID = "e5cd7e4891bf95d1d19206ce24a7b32e"
     private init() {
-        guard let rawURL = Bundle.main.object(forInfoDictionaryKey: "ACEAPIBaseURL") as? String,
-              let url = URL(string: rawURL),
+        let rawURL = Bundle.main.object(forInfoDictionaryKey: "ACEAPIBaseURL") as? String ?? ""
+        let isPlaceholder = rawURL.localizedCaseInsensitiveContains("replace_with_ace_domain")
+        guard let url = URL(string: rawURL),
               let scheme = url.scheme?.lowercased(),
-              ["http", "https"].contains(scheme) else {
-            preconditionFailure("ACE API address is not configured")
+              ["http", "https"].contains(scheme),
+              url.host?.isEmpty == false,
+              !isPlaceholder else {
+            // A bad build setting must never crash a customer's app. Network
+            // calls surface this message through the normal UI instead.
+            baseURL = URL(string: "https://api.invalid/")!
+            configurationError = "服务地址尚未配置，请联系平台管理员。"
+            return
         }
-#if !DEBUG
-        guard scheme == "https",
-              let host = url.host,
-              !host.isEmpty,
-              !host.localizedCaseInsensitiveContains("replace_with_ace_domain") else {
-            preconditionFailure("Release builds require a configured HTTPS ACE API address")
-        }
-#endif
         baseURL = url
+        configurationError = nil
     }
 }
 

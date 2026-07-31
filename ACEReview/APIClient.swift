@@ -31,6 +31,9 @@ final class APIClient {
         body: [String: Any]? = nil,
         authenticated: Bool = true
     ) async throws -> T {
+        if let configurationError = AppSettings.shared.configurationError {
+            throw APIClientError.server(configurationError)
+        }
         var request = URLRequest(url: url(for: path))
         request.httpMethod = method
         request.timeoutInterval = 60
