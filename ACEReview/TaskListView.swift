@@ -397,7 +397,7 @@ private struct ReportDetailView: View {
 
     private var scoreHeader: some View {
         let score = summary?.overallScore
-        HStack(spacing: 18) {
+        return HStack(spacing: 18) {
             ZStack {
                 Circle().stroke(ACETheme.line, lineWidth: 10)
                 Circle().trim(from: 0, to: CGFloat(min(max(score ?? 0, 0), 100)) / 100).stroke(ACETheme.green, style: StrokeStyle(lineWidth: 10, lineCap: .round))
