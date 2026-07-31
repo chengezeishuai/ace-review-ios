@@ -13,6 +13,15 @@ struct ProfileView: View {
                 VStack(alignment: .leading, spacing: 13) {
                     brandHeader
                     accountCard
+                    if !loadError.isEmpty {
+                        Label(loadError, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .padding(13)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(ACETheme.paper)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
                     if !memberships.isEmpty { roleCard }
                     settingsCard
                     Button(role: .destructive) { showLogout = true } label: {
@@ -41,7 +50,7 @@ struct ProfileView: View {
         HStack(spacing: 15) {
             Text(initials).font(.system(size: 28, weight: .medium, design: .rounded)).foregroundStyle(.white).frame(width: 72, height: 72).background(ACETheme.green).clipShape(Circle())
             VStack(alignment: .leading, spacing: 4) { Text(session.username.isEmpty ? "ACE 用户" : session.username).font(.title3.bold()).foregroundStyle(ACETheme.ink); Text("网球训练复盘").font(.subheadline).foregroundStyle(ACETheme.muted); Label("个人资料", systemImage: "person.crop.circle").font(.caption).foregroundStyle(ACETheme.muted) }
-            Spacer(); Image(systemName: "chevron.right").foregroundStyle(ACETheme.muted)
+            Spacer()
         }
         .padding(17).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay { RoundedRectangle(cornerRadius: 16).stroke(ACETheme.line, lineWidth: 1) }
     }
@@ -68,7 +77,7 @@ struct ProfileView: View {
     }
 
     private func settingRow(_ title: String, _ icon: String) -> some View {
-        HStack(spacing: 13) { Image(systemName: icon).foregroundStyle(ACETheme.green).frame(width: 20); Text(title).font(.subheadline).foregroundStyle(ACETheme.ink); Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundStyle(ACETheme.muted) }.padding(.horizontal, 17).frame(height: 54)
+        HStack(spacing: 13) { Image(systemName: icon).foregroundStyle(ACETheme.green).frame(width: 20); Text(title).font(.subheadline).foregroundStyle(ACETheme.ink); Spacer() }.padding(.horizontal, 17).frame(height: 54)
     }
 
     private var initials: String { String((session.username.isEmpty ? "A" : session.username).prefix(2)).uppercased() }

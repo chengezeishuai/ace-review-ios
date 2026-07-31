@@ -9,6 +9,8 @@ struct NewReviewView: View {
     @State private var title = ""
     @State private var player = ""
     @State private var notes = ""
+    @State private var isSubmitting = false
+    @State private var uploadError = ""
     let onSubmitted: () -> Void
 
     init(onSubmitted: @escaping () -> Void = {}) {
@@ -36,6 +38,15 @@ struct NewReviewView: View {
                     }
                     if let snapshot = uploads.snapshot(for: activeTaskID), snapshot.phase != .idle {
                         uploadStatus(snapshot)
+                    }
+                    if !uploads.lastError.isEmpty {
+                        Label(uploads.lastError, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(ACETheme.paper)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -176,20 +187,40 @@ struct NewReviewView: View {
                     TextField("想重点查看什么（选填）", text: $notes, axis: .vertical)
                 }
                 Section {
-                    Button("开始云端分析") {
+                    Button(isSubmitting ? "正在创建任务..." : "开始云端分析") {
                         guard let selectedAsset else { return }
-                        uploads.begin(asset: selectedAsset, title: title, player: player, notes: notes)
-                        showDetails = false
-                        onSubmitted()
+                        isSubmitting = true
+                        uploadError = ""
+                        uploads.begin(
+                            asset: selectedAsset,
+                            title: title,
+                            player: player,
+                            notes: notes,
+                            onTaskCreated: { _ in
+                                isSubmitting = false
+                                showDetails = false
+                                onSubmitted()
+                            },
+                            onFailure: { message in
+                                isSubmitting = false
+                                uploadError = message
+                            }
+                        )
                     }
+                    .overlay { if isSubmitting { ProgressView().tint(ACETheme.green) } }
                     .frame(maxWidth: .infinity)
                     .foregroundStyle(ACETheme.green)
-                    .disabled(selectedAsset == nil || uploads.hasActiveUpload)
+                    .disabled(selectedAsset == nil || uploads.hasActiveUpload || isSubmitting)
                 }
             }
             .navigationTitle("提交复盘")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showDetails = false } } }
+            .alert("提交未完成", isPresented: Binding(get: { !uploadError.isEmpty }, set: { if !$0 { uploadError = "" } })) {
+                Button("知道了", role: .cancel) {}
+            } message: {
+                Text(uploadError)
+            }
         }
     }
 

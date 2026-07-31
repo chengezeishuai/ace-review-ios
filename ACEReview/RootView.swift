@@ -28,6 +28,7 @@ private struct MainTabView: View {
             NavigationStack {
                 NewReviewView {
                     selectedTab = 1
+                    Task { await taskStore.load() }
                 }
             }
             .tabItem { Label("复盘", systemImage: "play.fill") }

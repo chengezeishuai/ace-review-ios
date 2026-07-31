@@ -12,6 +12,15 @@ struct TaskListView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     header
                     taskFilters
+                    if !taskStore.errorMessage.isEmpty {
+                        Label(taskStore.errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .padding(13)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(ACETheme.paper)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
                     if taskStore.isLoading && taskStore.tasks.isEmpty {
                         ProgressView().frame(maxWidth: .infinity).padding(.top, 50)
                     } else if visibleTasks.isEmpty {

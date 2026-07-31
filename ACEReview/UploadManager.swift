@@ -194,15 +194,21 @@ private final class UploadSlot: NSObject, ObservableObject {
         asset: PHAsset,
         title: String,
         player: String,
-        notes: String
+        notes: String,
+        onTaskCreated: @escaping (String) -> Void = { _ in },
+        onFailure: @escaping (String) -> Void = { _ in }
     ) {
         guard !hasActiveUpload else {
-            publishError("请等待当前视频提交完成")
+            let message = "请等待当前视频提交完成"
+            publishError(message)
+            publish { onFailure(message) }
             return
         }
         let resources = PHAssetResource.assetResources(for: asset)
         guard let resource = preferredVideoResource(from: resources) else {
-            publishError("无法读取这个视频")
+            let message = "无法读取这个视频"
+            publishError(message)
+            publish { onFailure(message) }
             return
         }
         let filename = normalizedFilename(resource.originalFilename)
@@ -251,6 +257,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                     self.persistManifestUnlocked()
                     self.lock.unlock()
                     self.activeTaskID = response.task.id
+                    onTaskCreated(response.task.id)
                 }
                 self.startReading(
                     asset: asset,
@@ -259,7 +266,9 @@ private final class UploadSlot: NSObject, ObservableObject {
                     manifest: newManifest
                 )
             } catch {
-                self.publishError(error.localizedDescription)
+                let message = error.localizedDescription
+                self.publishError(message)
+                self.publish { onFailure(message) }
             }
         }
     }
@@ -866,12 +875,16 @@ final class UploadManager: ObservableObject {
         asset: PHAsset,
         title: String,
         player: String,
-        notes: String
+        notes: String,
+        onTaskCreated: @escaping (String) -> Void = { _ in },
+        onFailure: @escaping (String) -> Void = { _ in }
     ) {
         guard let index = slots.indices.first(where: {
             !slots[$0].hasActiveUpload && !reservedSlotIndexes.contains($0)
         }) else {
-            lastError = "最多可同时提交两个视频，请等待其中一个完成"
+            let message = "最多可同时提交两个视频，请等待其中一个完成"
+            lastError = message
+            onFailure(message)
             return
         }
         reservedSlotIndexes.insert(index)
@@ -879,7 +892,9 @@ final class UploadManager: ObservableObject {
             asset: asset,
             title: title,
             player: player,
-            notes: notes
+            notes: notes,
+            onTaskCreated: onTaskCreated,
+            onFailure: onFailure
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.reservedSlotIndexes.remove(index)
