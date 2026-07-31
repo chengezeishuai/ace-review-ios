@@ -70,8 +70,6 @@ struct ProfileView: View {
         VStack(spacing: 0) {
             NavigationLink { ChangePasswordView() } label: { settingRow("账号安全", "lock") }
             Divider().padding(.leading, 42)
-            NavigationLink { PhotoBackupSettingsView() } label: { settingRow("隐私与数据", "hand.raised") }
-            Divider().padding(.leading, 42)
             NavigationLink { PerformanceCenterView() } label: { settingRow("训练表现", "chart.line.uptrend.xyaxis") }
             Divider().padding(.leading, 42)
             NavigationLink { SupportView() } label: { settingRow("帮助与支持", "questionmark.circle") }

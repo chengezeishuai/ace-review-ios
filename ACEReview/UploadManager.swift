@@ -106,10 +106,13 @@ private final class UploadSlot: NSObject, ObservableObject {
     private var preparationTimer: Timer?
     private var preparationStartedAt: Date?
 
+    // The Photos import can take longer than the visible preparation period.
+    // Keep the first 0-15% bounded, then make it clear that background upload
+    // has started and wait for confirmed byte progress.
     private static let minimumPreparationDisplay: TimeInterval = 10
     private static let progressTick: TimeInterval = 0.05
-    private static let preparationMessage = "加密中…完成后将高速上传"
-    private static let uploadMessage = "原视频正在通过加密安全通道上传"
+    private static let preparationMessage = "正在准备视频文件"
+    private static let uploadMessage = "文件开始上传，请稍后"
 
     private lazy var delegateQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -349,8 +352,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                         self.snapshot.preparationPercent,
                         Self.preparationPercent(since: startedAt)
                     )
-                    if self.snapshot.totalBytes > 0,
-                       elapsed >= Self.minimumPreparationDisplay {
+                    if elapsed >= Self.minimumPreparationDisplay {
                         self.snapshot.isShowingPreparation = false
                         self.snapshot.message = Self.uploadMessage
                     }
