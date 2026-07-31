@@ -120,10 +120,12 @@ struct TaskReference: Decodable {
 struct StreamingUploadResponse: Decodable {
     let task: TaskItem
     let partSize: Int
+    let uploadToken: String
 
     enum CodingKeys: String, CodingKey {
         case task
         case partSize = "part_size"
+        case uploadToken = "upload_token"
     }
 }
 
@@ -260,6 +262,7 @@ struct ProgressSummary: Decodable {
 
 struct UploadManifest: Codable {
     let taskID: String
+    let uploadToken: String
     let assetIdentifier: String
     let filename: String
     let createdAt: Date

@@ -244,6 +244,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                 let folder = try self.uploadDirectory(taskID: response.task.id)
                 let newManifest = UploadManifest(
                     taskID: response.task.id,
+                    uploadToken: response.uploadToken,
                     assetIdentifier: asset.localIdentifier,
                     filename: filename,
                     createdAt: preparationStart,
@@ -289,7 +290,7 @@ private final class UploadSlot: NSObject, ObservableObject {
             let file = directoryForExistingTask(manifest.taskID)
                 .appendingPathComponent(String(format: "%08d.part", index))
             if FileManager.default.fileExists(atPath: file.path) {
-                schedulePart(taskID: manifest.taskID, index: index, fileURL: file)
+                schedulePart(taskID: manifest.taskID, uploadToken: manifest.uploadToken, index: index, fileURL: file)
             }
         }
         publish {
@@ -398,6 +399,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                 if FileManager.default.fileExists(atPath: file.path) {
                     self.schedulePart(
                         taskID: manifest.taskID,
+                        uploadToken: manifest.uploadToken,
                         index: index,
                         fileURL: file
                     )
@@ -564,11 +566,13 @@ private final class UploadSlot: NSObject, ObservableObject {
         }
         manifest?.generatedParts.insert(index)
         persistManifestUnlocked()
+        let uploadToken = manifest?.uploadToken
         lock.unlock()
-        schedulePart(taskID: taskID, index: index, fileURL: fileURL)
+        guard let uploadToken else { return }
+        schedulePart(taskID: taskID, uploadToken: uploadToken, index: index, fileURL: fileURL)
     }
 
-    private func schedulePart(taskID: String, index: Int, fileURL: URL) {
+    private func schedulePart(taskID: String, uploadToken: String, index: Int, fileURL: URL) {
         var request = URLRequest(
             url: APIClient.shared.url(
                 for: "api/app/uploads/\(taskID)/parts/\(index)"
@@ -580,6 +584,7 @@ private final class UploadSlot: NSObject, ObservableObject {
             "application/octet-stream",
             forHTTPHeaderField: "Content-Type"
         )
+        request.setValue(uploadToken, forHTTPHeaderField: "X-ACE-Upload-Token")
         let attributes = try? FileManager.default.attributesOfItem(
             atPath: fileURL.path
         )
@@ -633,6 +638,7 @@ private final class UploadSlot: NSObject, ObservableObject {
             if let bodySize {
                 request.setValue(bodySize.stringValue, forHTTPHeaderField: "Content-Length")
             }
+            request.setValue(manifest.uploadToken, forHTTPHeaderField: "X-ACE-Upload-Token")
             attachAuthorization(to: &request)
             let task = backgroundSession.uploadTask(with: request, fromFile: bodyURL)
             task.taskDescription = "finalize|\(manifest.taskID)|-1|\(bodyURL.path)"
