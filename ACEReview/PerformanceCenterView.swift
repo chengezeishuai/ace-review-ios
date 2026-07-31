@@ -112,7 +112,9 @@ struct PerformanceCenterView: View {
                     group.addTask {
                         guard let summary = try? await APIClient.shared.reportSummary(taskID: task.id) else { return nil }
                         let candidates = summary.metrics.filter { $0.label == "综合评分" || $0.label == "综合得分" }
-                        guard let value = candidates.first?.value, let score = Double(value) else { return nil }
+                        guard let value = candidates.first?.value,
+                              let match = value.range(of: #"\\d+(?:\\.\\d+)?"#, options: .regularExpression),
+                              let score = Double(value[match]) else { return nil }
                         return ScoredReport(id: task.id, title: task.title, summary: summary.summary, score: score)
                     }
                 }
