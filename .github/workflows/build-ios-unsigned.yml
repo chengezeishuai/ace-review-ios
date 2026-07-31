@@ -2,6 +2,13 @@ name: Build ACE Review iOS
 
 on:
   workflow_dispatch:
+    inputs:
+      configuration:
+        description: 构建配置（测试包使用 Debug，正式包必须配置 HTTPS 域名）
+        required: true
+        default: Debug
+        type: choice
+        options: [Debug, Release]
   push:
     branches: [ main, master ]
 
@@ -24,7 +31,7 @@ jobs:
           xcodebuild \
             -project ACEReview.xcodeproj \
             -scheme "ACE Review" \
-            -configuration Release \
+            -configuration "${{ inputs.configuration || 'Release' }}" \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
             -archivePath build/ACEReview.xcarchive \
@@ -43,6 +50,6 @@ jobs:
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: ACEReview-unsigned-ipa
+          name: ACEReview-${{ inputs.configuration || 'Release' }}-unsigned-ipa
           path: build/ACEReview-unsigned.ipa
           if-no-files-found: error
