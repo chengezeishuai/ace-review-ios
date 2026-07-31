@@ -13,7 +13,11 @@ final class TaskStore: ObservableObject {
     }
 
     var errorMessage: String {
-        if case let .failed(message) = loadState { return message }
+        if case let .failed(message) = loadState {
+            let normalized = message.lowercased()
+            if normalized.contains("已取消") || normalized.contains("cancelled") { return "" }
+            return message
+        }
         return ""
     }
 
