@@ -25,7 +25,7 @@ struct NewReviewView: View {
 
     var body: some View {
         ZStack {
-            ACETheme.cream.ignoresSafeArea()
+            ACEBackground()
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header
@@ -88,11 +88,11 @@ struct NewReviewView: View {
                     .frame(height: 205)
                     .frame(maxWidth: .infinity)
                     .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
             } else {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(ACETheme.green.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(LinearGradient(colors: [ACETheme.green.opacity(0.13), ACETheme.lime.opacity(0.10)], startPoint: .topLeading, endPoint: .bottomTrailing))
                     VStack(spacing: 13) {
                         Image(systemName: "video.badge.plus")
                             .font(.system(size: 34, weight: .medium))
@@ -138,6 +138,14 @@ struct NewReviewView: View {
                 ForEach(AnalysisMode.allCases) { mode in Text(mode.title).tag(mode) }
             }
             .pickerStyle(.segmented)
+            HStack(spacing: 12) {
+                Image(analysisMode == .cloud ? "CloudAnalysis" : "LocalAnalysis")
+                    .resizable().scaledToFill().frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 9))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(analysisMode == .cloud ? "云端智能分析" : "本地隐私分析").font(.headline)
+                    Text(analysisMode == .cloud ? "保留完整视频证据，获得更完整的战术报告" : "原视频留在设备，只上传动作证据").font(.caption).foregroundStyle(ACETheme.muted)
+                }
+            }
             Text(analysisMode == .cloud
                  ? "上传原视频后在云端完成完整分析。"
                  : "视频仅在本机提取关键动作画面，原视频不会上传。")
@@ -263,8 +271,8 @@ struct NewReviewView: View {
         }
         .padding(18)
         .foregroundStyle(.white)
-        .background(ACETheme.ink)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+            .background(LinearGradient(colors: [ACETheme.ink, Color(red: 0.07, green: 0.20, blue: 0.23)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private func field(_ label: String, text: Binding<String>) -> some View {
@@ -358,7 +366,7 @@ private struct ActiveUploadEntryCard: View {
         }
         .padding(22)
         .foregroundStyle(.white)
-        .background(ACETheme.ink)
-        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .background(LinearGradient(colors: [ACETheme.ink, Color(red: 0.07, green: 0.20, blue: 0.23)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
