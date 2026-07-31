@@ -26,6 +26,7 @@
 		A00000000000000000000112 /* LocalEvidenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000214 /* LocalEvidenceManager.swift */; };
 		A00000000000000000000113 /* CommerceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000215 /* CommerceView.swift */; };
 		A00000000000000000000114 /* PerformanceCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000216 /* PerformanceCenterView.swift */; };
+		A00000000000000000000115 /* SettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000217 /* SettingsViews.swift */; };
 		A00000000000000000000110 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000212 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -52,6 +53,7 @@
 		A00000000000000000000214 /* LocalEvidenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalEvidenceManager.swift; sourceTree = "<group>"; };
 		A00000000000000000000215 /* CommerceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommerceView.swift; sourceTree = "<group>"; };
 		A00000000000000000000216 /* PerformanceCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceCenterView.swift; sourceTree = "<group>"; };
+		A00000000000000000000217 /* SettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -97,6 +99,7 @@
 				A00000000000000000000214 /* LocalEvidenceManager.swift */,
 				A00000000000000000000215 /* CommerceView.swift */,
 				A00000000000000000000216 /* PerformanceCenterView.swift */,
+				A00000000000000000000217 /* SettingsViews.swift */,
 			);
 			path = ACEReview;
 			sourceTree = "<group>";
@@ -197,6 +200,7 @@
 				A00000000000000000000112 /* LocalEvidenceManager.swift in Sources */,
 				A00000000000000000000113 /* CommerceView.swift in Sources */,
 				A00000000000000000000114 /* PerformanceCenterView.swift in Sources */,
+				A00000000000000000000115 /* SettingsViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

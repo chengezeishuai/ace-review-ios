@@ -168,14 +168,48 @@ struct NewReviewView: View {
     }
 
     private func uploadStatus(_ snapshot: UploadSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack { Text("正在上传").font(.headline); Spacer(); Text(snapshot.phase.rawValue).font(.caption).foregroundStyle(ACETheme.muted) }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(uploadTitle(snapshot)).font(.headline).foregroundStyle(ACETheme.ink)
+                    Text(snapshot.message).font(.caption).foregroundStyle(ACETheme.muted)
+                }
+                Spacer()
+                Text("\(Int(progress(for: snapshot).rounded()))%")
+                    .font(.caption.bold())
+                    .foregroundStyle(ACETheme.green)
+            }
             ProgressView(value: progress(for: snapshot), total: 100).tint(ACETheme.green)
-            Text(snapshot.message).font(.caption).foregroundStyle(ACETheme.muted)
+            HStack(spacing: 0) {
+                uploadStep("读取资源", active: snapshot.phase == .reading, complete: snapshot.phase != .reading)
+                uploadStep("上传视频", active: snapshot.phase == .uploading, complete: snapshot.phase == .finalizing || snapshot.phase == .completed)
+                uploadStep("启动分析", active: snapshot.phase == .finalizing, complete: snapshot.phase == .completed)
+            }
         }
-        .padding(16)
+        .padding(18)
         .background(ACETheme.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(ACETheme.line, lineWidth: 1) }
+    }
+
+    private func uploadStep(_ title: String, active: Bool, complete: Bool) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: complete ? "checkmark.circle.fill" : active ? "arrow.triangle.2.circlepath.circle.fill" : "circle")
+                .foregroundStyle(complete || active ? ACETheme.green : ACETheme.line)
+                .symbolEffect(.rotate, options: .repeating, isActive: active)
+            Text(title).font(.caption2).foregroundStyle(active || complete ? ACETheme.ink : ACETheme.muted)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func uploadTitle(_ snapshot: UploadSnapshot) -> String {
+        switch snapshot.phase {
+        case .reading: return "正在准备上传资源"
+        case .uploading: return "正在安全上传视频"
+        case .finalizing: return "正在创建分析任务"
+        case .completed: return "云端分析已开始"
+        default: return snapshot.phase.rawValue
+        }
     }
 
     private var detailsSheet: some View {
@@ -199,6 +233,10 @@ struct NewReviewView: View {
                             onTaskCreated: { _ in
                                 isSubmitting = false
                                 showDetails = false
+                                selectedAsset = nil
+                                title = ""
+                                player = ""
+                                notes = ""
                                 onSubmitted()
                             },
                             onFailure: { message in

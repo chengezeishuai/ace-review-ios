@@ -39,6 +39,7 @@ struct TaskItem: Identifiable, Decodable, Hashable {
     let createdAt: String
     let reportURL: String?
     let pdfURL: String?
+    let videoURL: String?
     let pngURL: String?
     let rallyURL: String?
 
@@ -52,6 +53,7 @@ struct TaskItem: Identifiable, Decodable, Hashable {
         case createdAt = "created_at"
         case reportURL = "report_url"
         case pdfURL = "pdf_url"
+        case videoURL = "video_url"
         case pngURL = "png_url"
         case rallyURL = "rally_url"
     }

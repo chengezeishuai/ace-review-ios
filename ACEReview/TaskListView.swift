@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TaskListView: View {
     @ObservedObject var taskStore: TaskStore
+    @EnvironmentObject private var uploads: UploadManager
     @State private var filter = TaskFilter.all
     @State private var selectedTask: TaskItem?
 
@@ -12,6 +13,9 @@ struct TaskListView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     header
                     taskFilters
+                    if let snapshot = uploads.snapshots.values.first, snapshot.phase != .idle {
+                        liveUploadCard(snapshot)
+                    }
                     if !taskStore.errorMessage.isEmpty {
                         Label(taskStore.errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(.footnote)
@@ -29,7 +33,9 @@ struct TaskListView: View {
                     } else {
                         LazyVStack(spacing: 10) {
                             ForEach(visibleTasks) { task in
-                                Button { selectedTask = task } label: { LibraryTaskRow(task: task) }
+                                Button { selectedTask = task } label: {
+                                    LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id))
+                                }
                                     .buttonStyle(.plain)
                                     .contextMenu {
                                         if task.status == "failed" { Button("重新分析") { Task { await taskStore.retry(task) } } }
@@ -45,7 +51,13 @@ struct TaskListView: View {
             }
         }
         .refreshable { await taskStore.load() }
-        .task { await taskStore.load() }
+        .task {
+            await taskStore.load()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(4))
+                if taskStore.tasks.contains(where: \.isActive) { await taskStore.load() }
+            }
+        }
         .navigationDestination(item: $selectedTask) { task in
             if task.isComplete { ReviewReportView(task: task) }
             else { TaskProgressView(task: task, store: taskStore) }
@@ -88,6 +100,52 @@ struct TaskListView: View {
     private var visibleTasks: [TaskItem] {
         taskStore.tasks.filter { filter.matches($0) }
     }
+
+    private func liveUploadCard(_ snapshot: UploadSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack {
+                Label(uploadHeadline(snapshot), systemImage: "arrow.triangle.2.circlepath")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(ACETheme.ink)
+                Spacer()
+                Text("\(Int(uploadProgress(snapshot).rounded()))%")
+                    .font(.caption.bold())
+                    .foregroundStyle(ACETheme.green)
+            }
+            ProgressView(value: uploadProgress(snapshot), total: 100).tint(ACETheme.green)
+            Text(snapshot.message).font(.caption).foregroundStyle(ACETheme.muted)
+            HStack(spacing: 7) {
+                processTag("准备资源", complete: snapshot.phase != .reading)
+                processTag("上传视频", complete: snapshot.phase == .finalizing || snapshot.phase == .completed)
+                processTag("云端分析", complete: snapshot.phase == .completed)
+            }
+        }
+        .padding(16)
+        .background(ACETheme.green.opacity(0.07))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 16).stroke(ACETheme.green.opacity(0.22), lineWidth: 1) }
+    }
+
+    private func uploadProgress(_ snapshot: UploadSnapshot) -> Double {
+        if snapshot.totalBytes > 0 { return Double(snapshot.bytesUploaded) / Double(snapshot.totalBytes) * 100 }
+        return Double(snapshot.preparationPercent)
+    }
+
+    private func uploadHeadline(_ snapshot: UploadSnapshot) -> String {
+        switch snapshot.phase {
+        case .reading: return "正在准备视频资源"
+        case .uploading: return "正在上传视频"
+        case .finalizing: return "上传完成，正在启动分析"
+        case .completed: return "云端正在分析"
+        default: return snapshot.phase.rawValue
+        }
+    }
+
+    private func processTag(_ title: String, complete: Bool) -> some View {
+        Label(title, systemImage: complete ? "checkmark.circle.fill" : "circle")
+            .font(.caption2)
+            .foregroundStyle(complete ? ACETheme.green : ACETheme.muted)
+    }
 }
 
 private enum TaskFilter: String, CaseIterable, Identifiable {
@@ -106,6 +164,7 @@ private enum TaskFilter: String, CaseIterable, Identifiable {
 
 private struct LibraryTaskRow: View {
     let task: TaskItem
+    let localUpload: UploadSnapshot?
     var body: some View {
         HStack(spacing: 12) {
             ZStack(alignment: .topLeading) {
@@ -117,8 +176,8 @@ private struct LibraryTaskRow: View {
                 HStack { Text(task.title).font(.subheadline.bold()).lineLimit(1); Spacer(); statusBadge }
                 Text(formattedDate(task.createdAt)).font(.caption).foregroundStyle(ACETheme.muted)
                 if task.isActive {
-                    ProgressView(value: Double(task.progress), total: 100).tint(ACETheme.green)
-                    Text("\(task.progress)% · \(task.clientMessage.isEmpty ? task.stage : task.clientMessage)").font(.caption2).foregroundStyle(ACETheme.muted).lineLimit(1)
+                    ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green)
+                    Text("\(Int(displayedProgress.rounded()))% · \(displayMessage)").font(.caption2).foregroundStyle(ACETheme.muted).lineLimit(1)
                 } else if task.isComplete {
                     Text("报告已生成").font(.caption).foregroundStyle(ACETheme.green)
                 } else {
@@ -132,28 +191,69 @@ private struct LibraryTaskRow: View {
         .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(ACETheme.line.opacity(0.8), lineWidth: 1) }
     }
     private var statusColor: Color { task.isComplete ? ACETheme.green : task.status == "failed" ? .red : ACETheme.green.opacity(0.85) }
+    private var displayedProgress: Double {
+        guard let localUpload else { return Double(task.progress) }
+        if localUpload.totalBytes > 0 { return Double(localUpload.bytesUploaded) / Double(localUpload.totalBytes) * 100 }
+        return Double(localUpload.preparationPercent)
+    }
+    private var displayMessage: String {
+        guard let localUpload else { return task.clientMessage.isEmpty ? task.stage : task.clientMessage }
+        return localUpload.message
+    }
     private var statusBadge: some View { Text(statusName).font(.caption2.bold()).padding(.horizontal, 9).padding(.vertical, 4).foregroundStyle(statusColor).background(statusColor.opacity(0.11)).clipShape(Capsule()) }
     private var statusName: String { switch task.status { case "completed": "已完成"; case "queued": "待分析"; case "uploading", "processing": "分析中"; default: "失败" } }
     private func formattedDate(_ source: String) -> String { source.replacingOccurrences(of: "T", with: " · ").prefix(16).description }
 }
 
 private struct TaskProgressView: View {
-    let task: TaskItem
+    @State private var currentTask: TaskItem
     @ObservedObject var store: TaskStore
+    @EnvironmentObject private var uploads: UploadManager
+
+    init(task: TaskItem, store: TaskStore) {
+        _currentTask = State(initialValue: task)
+        self.store = store
+    }
+
     var body: some View {
         VStack(spacing: 22) {
             Spacer()
-            Image(systemName: task.status == "failed" ? "exclamationmark.triangle.fill" : "waveform.path.ecg")
-                .font(.system(size: 50)).foregroundStyle(task.status == "failed" ? .red : ACETheme.green)
-            Text(task.status == "failed" ? "本次分析未完成" : "正在分析视频")
+            Image(systemName: currentTask.status == "failed" ? "exclamationmark.triangle.fill" : "waveform.path.ecg")
+                .font(.system(size: 50)).foregroundStyle(currentTask.status == "failed" ? .red : ACETheme.green)
+                .symbolEffect(.variableColor.iterative, isActive: currentTask.isActive)
+            Text(currentTask.status == "failed" ? "本次分析未完成" : progressTitle)
                 .font(.title2.bold()).foregroundStyle(ACETheme.ink)
-            Text(task.clientMessage.isEmpty ? task.stage : task.clientMessage).multilineTextAlignment(.center).foregroundStyle(ACETheme.muted)
-            if task.status != "failed" { ProgressView(value: Double(task.progress), total: 100).tint(ACETheme.green).padding(.horizontal, 42) }
-            if task.status == "failed" { Button("重新分析") { Task { await store.retry(task) } }.buttonStyle(PrimaryButtonStyle()) }
+            Text(progressMessage).multilineTextAlignment(.center).foregroundStyle(ACETheme.muted)
+            if currentTask.status != "failed" {
+                ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green).padding(.horizontal, 42)
+                Text("\(Int(displayedProgress.rounded()))% · 状态会自动刷新").font(.caption).foregroundStyle(ACETheme.muted)
+            }
+            if currentTask.status == "failed" { Button("重新分析") { Task { await store.retry(currentTask) } }.buttonStyle(PrimaryButtonStyle()) }
             Spacer()
         }
         .padding(28).background(ACETheme.cream.ignoresSafeArea())
         .navigationTitle("分析状态").navigationBarTitleDisplayMode(.inline)
+        .task {
+            while !Task.isCancelled && currentTask.isActive {
+                if let refreshed = await store.detail(id: currentTask.id) { currentTask = refreshed }
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
+    }
+
+    private var localUpload: UploadSnapshot? { uploads.snapshot(for: currentTask.id) }
+    private var displayedProgress: Double {
+        guard let localUpload else { return Double(currentTask.progress) }
+        if localUpload.totalBytes > 0 { return Double(localUpload.bytesUploaded) / Double(localUpload.totalBytes) * 100 }
+        return Double(localUpload.preparationPercent)
+    }
+    private var progressTitle: String {
+        if localUpload != nil { return "正在上传训练视频" }
+        return currentTask.status == "queued" ? "正在排队分析" : "正在分析视频"
+    }
+    private var progressMessage: String {
+        if let localUpload { return localUpload.message }
+        return currentTask.clientMessage.isEmpty ? currentTask.stage : currentTask.clientMessage
     }
 }
 
@@ -161,6 +261,9 @@ private struct ReviewReportView: View {
     let task: TaskItem
     @State private var summary: ReportSummary?
     @State private var showFullReport = false
+    @State private var showVideo = false
+    @State private var showPDF = false
+    @State private var loadError = ""
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -173,14 +276,57 @@ private struct ReviewReportView: View {
                     }
                 }
                 Text(summary?.summary ?? "报告正在载入。").font(.subheadline).foregroundStyle(ACETheme.muted).padding(16).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 14))
-                Button { showFullReport = true } label: { Label("查看完整报告", systemImage: "doc.text.image").frame(maxWidth: .infinity) }.buttonStyle(PrimaryButtonStyle())
+                if !loadError.isEmpty {
+                    Label(loadError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote).foregroundStyle(.red)
+                        .padding(13).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                VStack(spacing: 10) {
+                    if let videoURL = task.videoURL {
+                        Button { showVideo = true } label: {
+                            Label("查看训练视频", systemImage: "play.rectangle.fill").frame(maxWidth: .infinity)
+                        }.buttonStyle(PrimaryButtonStyle())
+                    }
+                    if task.reportURL != nil {
+                        Button { showFullReport = true } label: {
+                            Label("查看完整报告", systemImage: "doc.text.image").frame(maxWidth: .infinity)
+                        }.buttonStyle(PrimaryButtonStyle())
+                    } else {
+                        Label("报告文件暂不可用", systemImage: "doc.badge.ellipsis")
+                            .font(.footnote).foregroundStyle(ACETheme.muted)
+                    }
+                    if task.pdfURL != nil {
+                        Button { showPDF = true } label: {
+                            Label("打开 PDF 报告", systemImage: "arrow.down.doc").frame(maxWidth: .infinity)
+                        }
+                        .font(.subheadline.bold()).foregroundStyle(ACETheme.green)
+                    }
+                }
             }
             .padding(20).padding(.bottom, 30)
         }
         .background(ACETheme.cream.ignoresSafeArea())
         .navigationTitle("复盘报告").navigationBarTitleDisplayMode(.inline)
-        .task { summary = try? await APIClient.shared.reportSummary(taskID: task.id) }
-        .sheet(isPresented: $showFullReport) { NavigationStack { AuthenticatedWebView(path: task.reportURL ?? "api/app/tasks/\(task.id)/report").navigationTitle("完整报告").navigationBarTitleDisplayMode(.inline) } }
+        .task {
+            do { summary = try await APIClient.shared.reportSummary(taskID: task.id) }
+            catch { loadError = error.localizedDescription }
+        }
+        .sheet(isPresented: $showFullReport) {
+            if let reportURL = task.reportURL {
+                NavigationStack { AuthenticatedWebView(path: reportURL).navigationTitle("完整报告").navigationBarTitleDisplayMode(.inline) }
+            }
+        }
+        .sheet(isPresented: $showVideo) {
+            if let videoURL = task.videoURL {
+                NavigationStack { AuthenticatedWebView(path: videoURL).navigationTitle("训练视频").navigationBarTitleDisplayMode(.inline) }
+            }
+        }
+        .sheet(isPresented: $showPDF) {
+            if let pdfURL = task.pdfURL {
+                NavigationStack { AuthenticatedWebView(path: pdfURL).navigationTitle("PDF 报告").navigationBarTitleDisplayMode(.inline) }
+            }
+        }
     }
     private var scoreHeader: some View {
         HStack(spacing: 18) {

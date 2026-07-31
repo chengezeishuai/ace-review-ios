@@ -28,6 +28,14 @@ final class TaskStore: ObservableObject {
         }
     }
 
+    func detail(id: String) async -> TaskItem? {
+        do { return try await APIClient.shared.task(id: id) }
+        catch {
+            loadState = .failed(error.localizedDescription)
+            return nil
+        }
+    }
+
     func retry(_ task: TaskItem) async {
         guard task.status == "failed", !workingTaskIDs.contains(task.id) else {
             return
