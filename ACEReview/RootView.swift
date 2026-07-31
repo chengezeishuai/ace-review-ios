@@ -30,19 +30,19 @@ private struct MainTabView: View {
                     selectedTab = 1
                 }
             }
-            .tabItem { Label("新建复盘", systemImage: "plus.circle.fill") }
+            .tabItem { Label("复盘", systemImage: "play.fill") }
             .tag(0)
 
             NavigationStack {
                 TaskListView(taskStore: taskStore)
             }
-            .tabItem { Label("我的任务", systemImage: "rectangle.stack.fill") }
+            .tabItem { Label("任务库", systemImage: "folder.fill") }
             .tag(1)
 
             NavigationStack {
                 ProfileView()
             }
-            .tabItem { Label("我的", systemImage: "person.crop.circle.fill") }
+            .tabItem { Label("我的", systemImage: "person.fill") }
             .tag(2)
         }
         .tint(ACETheme.green)

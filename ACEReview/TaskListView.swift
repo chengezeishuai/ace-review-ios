@@ -325,13 +325,17 @@ private struct TaskLibraryCard: View {
 
     private var taskVisual: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(task.isComplete ? ACETheme.green.opacity(0.12) : ACETheme.lime.opacity(0.18))
+            TennisCourtPreview()
             Image(systemName: task.isComplete ? "checkmark.circle.fill" : task.status == "failed" ? "exclamationmark.triangle.fill" : "figure.tennis")
-                .font(.title2)
-                .foregroundStyle(task.status == "failed" ? .red : ACETheme.green)
+                .font(.title3.bold())
+                .foregroundStyle(task.status == "failed" ? .red : .white)
+                .padding(5)
+                .background(task.status == "failed" ? Color.white.opacity(0.9) : ACETheme.green.opacity(0.88))
+                .clipShape(Circle())
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(5)
         }
-        .frame(width: 60, height: 60)
+        .frame(width: 110, height: 72)
     }
 
     private var statusBadge: some View {
@@ -392,14 +396,15 @@ private struct ReportDetailView: View {
     }
 
     private var scoreHeader: some View {
+        let score = summary?.overallScore
         HStack(spacing: 18) {
             ZStack {
                 Circle().stroke(ACETheme.line, lineWidth: 10)
-                Circle().trim(from: 0, to: 1).stroke(ACETheme.green, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                Circle().trim(from: 0, to: CGFloat(min(max(score ?? 0, 0), 100)) / 100).stroke(ACETheme.green, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 2) {
-                    Text("已完成").font(.caption.bold()).foregroundStyle(ACETheme.green)
-                    Text("报告").font(.caption2).foregroundStyle(ACETheme.muted)
+                    Text(score.map { String(Int($0.rounded())) } ?? "--").font(.title2.bold()).foregroundStyle(ACETheme.green)
+                    Text(score == nil ? "待评分" : "综合得分").font(.caption2).foregroundStyle(ACETheme.muted)
                 }
             }
             .frame(width: 94, height: 94)
@@ -407,7 +412,7 @@ private struct ReportDetailView: View {
                 Text(task.title).font(.title3.bold()).foregroundStyle(ACETheme.ink)
                 Text(task.player?.isEmpty == false ? task.player! : "训练复盘")
                     .font(.subheadline).foregroundStyle(ACETheme.muted)
-                Label("分析已完成", systemImage: "checkmark.seal.fill")
+                Label(score == nil ? "报告已完成，等待技术评分" : "分析已完成", systemImage: "checkmark.seal.fill")
                     .font(.caption.bold()).foregroundStyle(ACETheme.green)
             }
             Spacer()
@@ -434,6 +439,14 @@ private struct ReportDetailView: View {
                         reportMetric(title: metric.label, value: metric.value, icon: "chart.line.uptrend.xyaxis")
                     }
                 }
+                if summary.metrics.count > 3 {
+                    VStack(spacing: 10) {
+                        ForEach(summary.metrics.dropFirst(3).prefix(3)) { metric in
+                            metricLine(metric)
+                        }
+                    }
+                    .aceCard()
+                }
             } else if summary?.reportAvailable == true {
                 Text("报告已生成，技术指标将在分析引擎回传后显示。")
                     .font(.subheadline)
@@ -454,6 +467,15 @@ private struct ReportDetailView: View {
         .background(ACETheme.paper)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(ACETheme.line.opacity(0.75), lineWidth: 1) }
+    }
+
+    private func metricLine(_ metric: ReportMetric) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "circle.inset.filled").foregroundStyle(ACETheme.green)
+            Text(metric.label).font(.subheadline.bold()).foregroundStyle(ACETheme.ink)
+            Spacer()
+            Text(metric.value).font(.subheadline.bold()).foregroundStyle(ACETheme.green)
+        }
     }
 
     private var actions: some View {
@@ -484,6 +506,24 @@ private struct ReportDetailView: View {
         .background(ACETheme.paper)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(ACETheme.line.opacity(0.75), lineWidth: 1) }
+    }
+}
+
+private struct TennisCourtPreview: View {
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(LinearGradient(colors: [ACETheme.green.opacity(0.88), Color(red: 0.16, green: 0.29, blue: 0.25)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                RoundedRectangle(cornerRadius: 2)
+                    .stroke(.white.opacity(0.72), lineWidth: 1)
+                    .padding(.horizontal, proxy.size.width * 0.13)
+                    .padding(.vertical, proxy.size.height * 0.17)
+                Rectangle().fill(.white.opacity(0.8)).frame(height: 1)
+                Circle().fill(ACETheme.lime).frame(width: 6, height: 6).offset(x: proxy.size.width * 0.16, y: -proxy.size.height * 0.11)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 

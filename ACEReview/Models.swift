@@ -90,6 +90,14 @@ struct ReportSummary: Decodable {
         case analysisMode = "analysis_mode"
         case summary, metrics
     }
+
+    /// Only exposes a score when the report contract actually returned one.
+    var overallScore: Double? {
+        let labels = ["综合评分", "综合得分", "总分", "评分"]
+        guard let metric = metrics.first(where: { labels.contains($0.label) }) else { return nil }
+        let match = metric.value.range(of: #"\d+(?:\.\d+)?"#, options: .regularExpression)
+        return match.flatMap { Double(metric.value[$0]) }
+    }
 }
 
 struct EvidenceCreateResponse: Decodable {

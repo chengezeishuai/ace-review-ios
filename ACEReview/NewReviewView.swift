@@ -92,10 +92,14 @@ struct NewReviewView: View {
     }
 
     private var creditDeck: some View {
-        HStack(spacing: 0) {
-            creditCell(title: "云端额度", value: cloudCredits, icon: "cloud")
-            Divider().frame(height: 54)
-            creditCell(title: "本地额度", value: localCredits, icon: "iphone")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("可用额度")
+                .font(.headline)
+                .foregroundStyle(ACETheme.ink)
+            HStack(spacing: 12) {
+                creditCell(title: "云端分析", value: cloudCredits, icon: "cloud")
+                creditCell(title: "本地分析", value: localCredits, icon: "iphone")
+            }
         }
         .aceCard()
     }
@@ -106,13 +110,16 @@ struct NewReviewView: View {
                 .font(.title3)
                 .foregroundStyle(ACETheme.green)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.caption).foregroundStyle(ACETheme.muted)
-                Text(isLoadingCredits ? "--" : "\(value) 次")
-                    .font(.title3.bold())
+                Text(isLoadingCredits ? "--" : "\(value)")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(ACETheme.ink)
+                Text(title).font(.caption).foregroundStyle(ACETheme.muted)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        .padding(14)
+        .background(ACETheme.cream.opacity(0.78))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var modeChoices: some View {
@@ -137,17 +144,17 @@ struct NewReviewView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Image(systemName: icon)
                     .font(.title2)
-                    .foregroundStyle(analysisMode == mode ? .white : ACETheme.green)
+                    .foregroundStyle(ACETheme.green)
                 Text(title).font(.subheadline.bold())
                 Text(detail).font(.caption).multilineTextAlignment(.leading)
             }
-            .foregroundStyle(analysisMode == mode ? .white : ACETheme.ink)
+            .foregroundStyle(ACETheme.ink)
             .frame(maxWidth: .infinity, minHeight: 126, alignment: .leading)
             .padding(18)
-            .background(analysisMode == mode ? ACETheme.green : ACETheme.paper)
+            .background(ACETheme.paper)
             .overlay {
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(analysisMode == mode ? ACETheme.green : ACETheme.line, lineWidth: 1)
+                    .stroke(analysisMode == mode ? ACETheme.green : ACETheme.line, lineWidth: analysisMode == mode ? 2 : 1)
             }
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
