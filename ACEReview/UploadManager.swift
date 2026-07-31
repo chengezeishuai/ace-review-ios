@@ -105,6 +105,7 @@ private final class UploadSlot: NSObject, ObservableObject {
     private var sessionReady = false
     private var preparationTimer: Timer?
     private var preparationStartedAt: Date?
+    private var responseBodies: [Int: Data] = [:]
 
     // The Photos import can take longer than the visible preparation period.
     // Keep the first 0-15% bounded, then make it clear that background upload
@@ -579,6 +580,12 @@ private final class UploadSlot: NSObject, ObservableObject {
             "application/octet-stream",
             forHTTPHeaderField: "Content-Type"
         )
+        let attributes = try? FileManager.default.attributesOfItem(
+            atPath: fileURL.path
+        )
+        if let size = attributes?[.size] as? NSNumber {
+            request.setValue(size.stringValue, forHTTPHeaderField: "Content-Length")
+        }
         attachAuthorization(to: &request)
         let task = backgroundSession.uploadTask(with: request, fromFile: fileURL)
         task.taskDescription = "part|\(taskID)|\(index)|\(fileURL.path)"
@@ -619,6 +626,13 @@ private final class UploadSlot: NSObject, ObservableObject {
             request.httpMethod = "POST"
             request.timeoutInterval = 300
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let bodyAttributes = try FileManager.default.attributesOfItem(
+                atPath: bodyURL.path
+            )
+            let bodySize = bodyAttributes[.size] as? NSNumber
+            if let bodySize {
+                request.setValue(bodySize.stringValue, forHTTPHeaderField: "Content-Length")
+            }
             attachAuthorization(to: &request)
             let task = backgroundSession.uploadTask(with: request, fromFile: bodyURL)
             task.taskDescription = "finalize|\(manifest.taskID)|-1|\(bodyURL.path)"
@@ -760,6 +774,14 @@ private final class UploadSlot: NSObject, ObservableObject {
 extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
     func urlSession(
         _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive data: Data
+    ) {
+        responseBodies[dataTask.taskIdentifier, default: Data()].append(data)
+    }
+
+    func urlSession(
+        _ session: URLSession,
         task: URLSessionTask,
         didSendBodyData bytesSent: Int64,
         totalBytesSent: Int64,
@@ -789,12 +811,19 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
         let kind = fields[0]
         let taskID = fields[1]
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
-        guard error == nil, (200..<300).contains(status) else {
+        let responseBody = responseBodies.removeValue(forKey: task.taskIdentifier)
+        let envelope = responseBody.flatMap { try? JSONDecoder().decode(UploadResponse.self, from: $0) }
+        guard error == nil,
+              (200..<300).contains(status),
+              envelope?.code == 200 else {
             lock.lock()
             manifest?.finalizeScheduled = false
             persistManifestUnlocked()
             lock.unlock()
-            publishError(error?.localizedDescription ?? "后台上传失败（\(status)）")
+            let detail = envelope?.message?.isEmpty == false
+                ? envelope?.message ?? "后台上传失败（HTTP \(status)）"
+                : error?.localizedDescription ?? "后台上传失败（HTTP \(status)）"
+            publishError(detail)
             return
         }
         if kind == "part", let index = Int(fields[2]) {
@@ -826,6 +855,16 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
             self?.backgroundEventsCompletionHandler?()
             self?.backgroundEventsCompletionHandler = nil
         }
+    }
+}
+
+private struct UploadResponse: Decodable {
+    let code: Int
+    let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case code
+        case message = "msg"
     }
 }
 
