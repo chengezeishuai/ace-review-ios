@@ -25,6 +25,7 @@
 		A00000000000000000000111 /* AuthenticatedWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000213 /* AuthenticatedWebView.swift */; };
 		A00000000000000000000112 /* LocalEvidenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000214 /* LocalEvidenceManager.swift */; };
 		A00000000000000000000113 /* CommerceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000215 /* CommerceView.swift */; };
+		A00000000000000000000114 /* PerformanceCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000216 /* PerformanceCenterView.swift */; };
 		A00000000000000000000110 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000212 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -50,6 +51,7 @@
 		A00000000000000000000213 /* AuthenticatedWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticatedWebView.swift; sourceTree = "<group>"; };
 		A00000000000000000000214 /* LocalEvidenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalEvidenceManager.swift; sourceTree = "<group>"; };
 		A00000000000000000000215 /* CommerceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommerceView.swift; sourceTree = "<group>"; };
+		A00000000000000000000216 /* PerformanceCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceCenterView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +96,7 @@
 				A00000000000000000000213 /* AuthenticatedWebView.swift */,
 				A00000000000000000000214 /* LocalEvidenceManager.swift */,
 				A00000000000000000000215 /* CommerceView.swift */,
+				A00000000000000000000216 /* PerformanceCenterView.swift */,
 			);
 			path = ACEReview;
 			sourceTree = "<group>";
@@ -193,6 +196,7 @@
 				A00000000000000000000111 /* AuthenticatedWebView.swift in Sources */,
 				A00000000000000000000112 /* LocalEvidenceManager.swift in Sources */,
 				A00000000000000000000113 /* CommerceView.swift in Sources */,
+				A00000000000000000000114 /* PerformanceCenterView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

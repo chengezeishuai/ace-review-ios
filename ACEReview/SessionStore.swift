@@ -34,7 +34,7 @@ final class SessionStore: ObservableObject {
             )
             isAuthenticated = true
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = localizedError(error)
         }
     }
 
@@ -63,5 +63,16 @@ final class SessionStore: ObservableObject {
         mustChangePassword = false
         isAuthenticated = false
     }
-}
 
+    private func localizedError(_ error: Error) -> String {
+        let message = error.localizedDescription
+        if message.localizedCaseInsensitiveContains("password input error")
+            || message.localizedCaseInsensitiveContains("password") {
+            return "账号或密码不正确，请重新输入"
+        }
+        if message.localizedCaseInsensitiveContains("mobile client") {
+            return "移动端服务暂未配置完成，请联系平台管理员"
+        }
+        return message
+    }
+}

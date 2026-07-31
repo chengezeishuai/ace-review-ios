@@ -82,6 +82,20 @@ struct ProfileView: View {
                     }
                     .aceCard()
 
+                    NavigationLink {
+                        PerformanceCenterView()
+                    } label: {
+                        settingsRow("综合分析与成绩排名", icon: "chart.bar.xaxis")
+                    }
+                    .aceCard()
+
+                    NavigationLink {
+                        ChangePasswordView()
+                    } label: {
+                        settingsRow("修改登录密码", icon: "key")
+                    }
+                    .aceCard()
+
                     if !memberships.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("我的组织与身份").font(.headline)

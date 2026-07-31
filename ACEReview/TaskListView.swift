@@ -216,7 +216,7 @@ struct TaskListView: View {
     }
 
     private func openHTML(_ task: TaskItem) {
-        guard let path = task.reportURL else { return }
+        let path = task.reportURL ?? "api/app/tasks/\(task.id)/report"
         webPage = WebPage(title: "复盘报告", path: path)
     }
 
@@ -458,10 +458,8 @@ private struct ReportDetailView: View {
 
     private var actions: some View {
         VStack(spacing: 10) {
-            if task.reportURL != nil {
-                Button(action: openHTML) { PrimaryActionLabel(title: "查看完整报告", systemImage: "doc.text.image") }
-                    .buttonStyle(PrimaryButtonStyle())
-            }
+            Button(action: openHTML) { PrimaryActionLabel(title: "查看完整报告", systemImage: "doc.text.image") }
+                .buttonStyle(PrimaryButtonStyle())
             if task.pdfURL != nil {
                 Button(action: openPDF) { secondaryAction("下载 PDF 报告", icon: "arrow.down.doc") }
             }
