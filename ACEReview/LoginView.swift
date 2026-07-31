@@ -76,7 +76,7 @@ struct LoginView: View {
                 Text("ACE 复盘")
                     .font(.system(size: 25, weight: .bold, design: .rounded))
                     .foregroundStyle(ACETheme.ink)
-                Text("TENNIS REVIEW")
+                Text("网球训练复盘")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(2.2)
                     .foregroundStyle(ACETheme.green)

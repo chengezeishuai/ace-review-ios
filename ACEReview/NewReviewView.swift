@@ -66,7 +66,7 @@ struct NewReviewView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("NEW REVIEW")
+            Text("ACE 复盘")
                 .font(.system(size: 11, weight: .bold))
                 .tracking(2.3)
                 .foregroundStyle(ACETheme.green)

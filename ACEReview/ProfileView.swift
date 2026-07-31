@@ -15,7 +15,7 @@ struct ProfileView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text("ACCOUNT")
+                        Text("个人中心")
                             .font(.system(size: 11, weight: .bold))
                             .tracking(2.3)
                             .foregroundStyle(ACETheme.green)

@@ -2,23 +2,19 @@ import Foundation
 import SwiftUI
 
 enum ACETheme {
-    static let ink = Color(red: 0.055, green: 0.09, blue: 0.14)
-    static let green = Color(red: 0.02, green: 0.49, blue: 0.55)
-    static let lime = Color(red: 0.20, green: 0.70, blue: 0.54)
-    static let coral = Color(red: 0.94, green: 0.43, blue: 0.31)
-    static let cream = Color(red: 0.93, green: 0.96, blue: 0.96)
+    static let ink = Color(red: 0.12, green: 0.17, blue: 0.14)
+    static let green = Color(red: 0.26, green: 0.43, blue: 0.31)
+    static let lime = Color(red: 0.62, green: 0.74, blue: 0.53)
+    static let coral = Color(red: 0.76, green: 0.48, blue: 0.34)
+    static let cream = Color(red: 0.98, green: 0.985, blue: 0.965)
     static let paper = Color.white
-    static let muted = Color(red: 0.34, green: 0.41, blue: 0.49)
-    static let line = Color(red: 0.80, green: 0.85, blue: 0.86)
+    static let muted = Color(red: 0.40, green: 0.46, blue: 0.40)
+    static let line = Color(red: 0.84, green: 0.87, blue: 0.81)
 }
 
 struct ACEBackground: View {
     var body: some View {
-        ZStack {
-            ACETheme.cream
-            Circle().fill(ACETheme.lime.opacity(0.20)).frame(width: 340, height: 340).blur(radius: 34).offset(x: 150, y: -330)
-            Circle().fill(ACETheme.coral.opacity(0.12)).frame(width: 270, height: 270).blur(radius: 36).offset(x: -170, y: 350)
-        }.ignoresSafeArea()
+        ACETheme.cream.ignoresSafeArea()
     }
 }
 
@@ -26,10 +22,9 @@ struct ACEBrandMark: View {
     var size: CGFloat = 56
     var body: some View {
         ZStack {
-            Circle().fill(LinearGradient(colors: [ACETheme.ink, Color(red: 0.08, green: 0.22, blue: 0.26)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            Circle().stroke(ACETheme.lime, lineWidth: size * 0.05).padding(size * 0.15)
-            Circle().trim(from: 0.10, to: 0.48).stroke(ACETheme.coral, style: StrokeStyle(lineWidth: size * 0.045, lineCap: .round)).rotationEffect(.degrees(-18)).padding(size * 0.24)
-            Circle().fill(.white.opacity(0.9)).frame(width: size * 0.12, height: size * 0.12).offset(x: size * 0.16, y: -size * 0.16)
+            Circle().fill(ACETheme.green)
+            Circle().stroke(ACETheme.lime.opacity(0.72), lineWidth: size * 0.05).padding(size * 0.15)
+            Circle().trim(from: 0.12, to: 0.47).stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: size * 0.045, lineCap: .round)).rotationEffect(.degrees(-18)).padding(size * 0.24)
         }.frame(width: size, height: size)
     }
 }
@@ -66,9 +61,9 @@ struct PrimaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .frame(minHeight: 24)
             .padding(.vertical, 15)
-            .background(LinearGradient(colors: [ACETheme.green.opacity(configuration.isPressed ? 0.78 : 1), ACETheme.lime.opacity(configuration.isPressed ? 0.72 : 0.90)], startPoint: .leading, endPoint: .trailing))
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(ACETheme.green.opacity(configuration.isPressed ? 0.78 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -97,12 +92,14 @@ struct PrimaryActionLabel: View {
 extension View {
     func aceCard() -> some View {
         self
-            .padding(17)
-            .background(ACETheme.paper.opacity(0.86))
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .padding(20)
+            .background(ACETheme.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(ACETheme.line.opacity(0.68), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .stroke(ACETheme.line.opacity(0.72), lineWidth: 1)
+            }
+            .shadow(color: ACETheme.green.opacity(0.07), radius: 16, y: 6)
     }
 }
 }

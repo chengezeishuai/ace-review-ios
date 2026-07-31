@@ -27,7 +27,7 @@ struct CommerceView: View {
                             VStack(alignment: .leading, spacing: 11) {
                                 HStack(alignment: .firstTextBaseline) {
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text(product.name).font(.headline)
+                                        Text(displayName(for: product)).font(.headline)
                                         Text(product.productType == "plan" ? "套餐服务" : "加次包")
                                             .font(.caption).foregroundStyle(ACETheme.muted)
                                     }
@@ -51,7 +51,7 @@ struct CommerceView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("已开通权益").font(.headline)
                             ForEach(entitlements) { item in
-                                HStack { Text(item.planCode).font(.subheadline.bold()); Spacer(); Text("云端 \(item.cloudRemaining) · 本地 \(item.localRemaining)").font(.caption).foregroundStyle(ACETheme.muted) }
+                                HStack { Text(planName(item.planCode)).font(.subheadline.bold()); Spacer(); Text("云端 \(item.cloudRemaining) 次 · 本地 \(item.localRemaining) 次").font(.caption).foregroundStyle(ACETheme.muted) }
                             }
                         }.aceCard()
                     }
@@ -61,12 +61,12 @@ struct CommerceView: View {
                             ForEach(orders.prefix(8)) { order in
                                 HStack(alignment: .firstTextBaseline) {
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text(order.productCode).font(.subheadline.bold())
+                                        Text(planName(order.productCode)).font(.subheadline.bold())
                                         Text(order.beneficiaryName).font(.caption).foregroundStyle(ACETheme.muted)
                                     }
                                     Spacer()
                                     VStack(alignment: .trailing, spacing: 3) {
-                                        Text(order.status == "paid" ? "已开通" : order.status).font(.caption.bold())
+                                        Text(orderStatusName(order.status)).font(.caption.bold())
                                         if let paidAt = order.paidAt { Text(paidAt).font(.caption2).foregroundStyle(ACETheme.muted) }
                                     }
                                 }
@@ -121,10 +121,24 @@ struct CommerceView: View {
         do {
             let order = try await APIClient.shared.purchase(productCode: product.code)
             await load()
-            purchaseMessage = "已为你的账号开通 \(product.name)：云端 \(order.cloudCredits) 次，本地 \(order.localCredits) 次。"
+            purchaseMessage = "已为你的账号开通\(displayName(for: product))：云端 \(order.cloudCredits) 次，本地 \(order.localCredits) 次。"
         }
         catch { errorMessage = error.localizedDescription }
     }
 
     private func price(_ cents: Int) -> String { cents == 0 ? "测试开通" : String(format: "¥%.2f", Double(cents) / 100) }
+
+    private func displayName(for product: CommerceProduct) -> String {
+        product.name.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(scalar.value)
+        } ? product.name : planName(product.code)
+    }
+
+    private func planName(_ code: String) -> String {
+        ["trial": "体验套餐", "personal": "个人套餐", "plus": "进阶套餐", "coach": "教练套餐", "club": "俱乐部套餐", "cloud_pack": "云端加次包", "local_pack": "本地加次包"][code.lowercased()] ?? "服务套餐"
+    }
+
+    private func orderStatusName(_ status: String) -> String {
+        ["paid": "已开通", "pending": "待处理", "cancelled": "已取消", "failed": "开通失败"][status.lowercased()] ?? "处理中"
+    }
 }

@@ -128,7 +128,7 @@ struct TaskListView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("MY REVIEWS")
+            Text("我的复盘")
                 .font(.system(size: 11, weight: .bold))
                 .tracking(2.3)
                 .foregroundStyle(ACETheme.green)
