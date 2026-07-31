@@ -227,6 +227,39 @@ final class APIClient {
         ])
     }
 
+    func createMediaBackup(filename: String, mimeType: String, assetIdentifier: String) async throws -> MediaBackupCreateResponse {
+        try await request("api/app/media-backups", method: "POST", body: [
+            "filename": filename,
+            "mimeType": mimeType,
+            "assetIdentifier": assetIdentifier
+        ])
+    }
+
+    func uploadMediaBackupPart(backupID: String, index: Int, data: Data) async throws {
+        var request = URLRequest(url: url(for: "api/app/media-backups/\(backupID)/parts/\(index)"))
+        request.httpMethod = "PUT"
+        request.timeoutInterval = 120
+        request.httpBody = data
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
+        if let token = KeychainStore.get("accessToken") {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        let (responseData, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIClientError.server(serverMessage(responseData, fallback: "备份分片上传失败"))
+        }
+        let envelope = try decoder.decode(RuoYiEnvelope<EmptyResponse>.self, from: responseData)
+        guard envelope.code == 200 else { throw APIClientError.server(envelope.message ?? "备份分片上传失败") }
+    }
+
+    func finalizeMediaBackup(backupID: String, size: Int64, totalParts: Int) async throws {
+        let _: EmptyResponse = try await request("api/app/media-backups/\(backupID)/finalize", method: "POST", body: [
+            "size": size,
+            "totalParts": totalParts
+        ])
+    }
+
     func download(path: String) async throws -> URL {
         var request = URLRequest(url: url(for: path))
         request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
@@ -243,6 +276,17 @@ final class APIClient {
         try? FileManager.default.removeItem(at: destination)
         try FileManager.default.moveItem(at: temporaryURL, to: destination)
         return destination
+    }
+}
+
+struct MediaBackupCreateResponse: Decodable {
+    let id: String
+    let partSize: Int
+    let completed: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, completed
+        case partSize = "part_size"
     }
 }
 
