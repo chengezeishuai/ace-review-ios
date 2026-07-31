@@ -224,6 +224,10 @@ struct TaskListView: View {
         guard let path = task.rallyURL else { return }
         webPage = WebPage(title: "Rally 回合", path: path)
     }
+
+    private var filteredTasks: [TaskItem] {
+        taskStore.tasks.filter { filter.matches($0) }
+    }
 }
 
 private enum TaskFilter: String, CaseIterable, Identifiable {
@@ -430,12 +434,11 @@ private struct ReportDetailView: View {
                         reportMetric(title: metric.label, value: metric.value, icon: "chart.line.uptrend.xyaxis")
                     }
                 }
-            } else {
-                HStack(spacing: 10) {
-                    reportMetric(title: "任务状态", value: "已完成", icon: "checkmark.circle")
-                    reportMetric(title: "分析进度", value: "100%", icon: "chart.line.uptrend.xyaxis")
-                    reportMetric(title: "分析模式", value: task.analysisMode == "device_evidence" ? "本地" : "云端", icon: "cloud")
-                }
+            } else if summary?.reportAvailable == true {
+                Text("报告已生成，技术指标将在分析引擎回传后显示。")
+                    .font(.subheadline)
+                    .foregroundStyle(ACETheme.muted)
+                    .aceCard()
             }
         }
     }
@@ -522,10 +525,6 @@ private struct CollaborationSheet: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } } }
             .task { await load() }
         }
-    }
-
-    private var filteredTasks: [TaskItem] {
-        taskStore.tasks.filter { filter.matches($0) }
     }
 
     private func load() async {

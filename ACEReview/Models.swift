@@ -24,7 +24,7 @@ struct PasswordChangeResponse: Decodable {
     }
 }
 
-struct TaskItem: Identifiable, Decodable {
+struct TaskItem: Identifiable, Decodable, Hashable {
     let id: String
     let title: String
     let player: String?
