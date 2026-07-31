@@ -11,7 +11,7 @@ struct LoginView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
-                    Spacer(minLength: 72)
+                    Spacer(minLength: 56)
                     brand
                     VStack(alignment: .leading, spacing: 18) {
                         Text("欢迎回来")
@@ -20,19 +20,20 @@ struct LoginView: View {
                         Text("登录后提交训练录像，并随时查看分析进度。")
                             .foregroundStyle(ACETheme.muted)
 
-                        TextField("账号", text: $username)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .textContentType(.username)
-                            .padding(16)
-                            .background(Color.white.opacity(0.9))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        Text("账号登录")
+                            .font(.headline)
+                            .foregroundStyle(ACETheme.ink)
+                        loginField(title: "账号", systemImage: "person") {
+                            TextField("请输入账号", text: $username)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .textContentType(.username)
+                        }
 
-                        SecureField("密码", text: $password)
-                            .textContentType(.password)
-                            .padding(16)
-                            .background(Color.white.opacity(0.9))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        loginField(title: "密码", systemImage: "lock") {
+                            SecureField("请输入密码", text: $password)
+                                .textContentType(.password)
+                        }
 
                         if !session.errorMessage.isEmpty {
                             Text(session.errorMessage)
@@ -62,6 +63,10 @@ struct LoginView: View {
                         )
                     }
                     .aceCard()
+                    Text("使用 ACE 平台开通的账号登录，训练资料仅用于本次复盘服务。")
+                        .font(.caption)
+                        .foregroundStyle(ACETheme.muted)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     Spacer(minLength: 30)
                 }
                 .padding(.horizontal, 22)
@@ -81,6 +86,24 @@ struct LoginView: View {
                     .tracking(2.2)
                     .foregroundStyle(ACETheme.green)
             }
+        }
+    }
+
+    private func loginField<Content: View>(title: String, systemImage: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.caption.bold()).foregroundStyle(ACETheme.muted)
+            HStack(spacing: 11) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(ACETheme.green)
+                    .frame(width: 18)
+                content()
+                    .foregroundStyle(ACETheme.ink)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 54)
+            .background(ACETheme.cream.opacity(0.72))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(ACETheme.line, lineWidth: 1) }
         }
     }
 }

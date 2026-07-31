@@ -30,6 +30,7 @@ struct PerformanceCenterView: View {
                         .padding(.vertical, 42)
                     } else {
                         scoreCard
+                        rankingCard
                         reportList
                     }
                 }
@@ -81,6 +82,22 @@ struct PerformanceCenterView: View {
                 .padding(.vertical, 7)
                 if report.id != reports.last?.id { Divider() }
             }
+        }
+        .aceCard()
+    }
+
+    private var rankingCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "trophy")
+                .font(.title3)
+                .foregroundStyle(ACETheme.green)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("成绩排名").font(.headline).foregroundStyle(ACETheme.ink)
+                Text("当前只展示已完成评分的个人表现；同组织排名会在平台返回可比较的真实成绩后显示。")
+                    .font(.caption).foregroundStyle(ACETheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
         }
         .aceCard()
     }
