@@ -25,7 +25,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>ACE 需要读取你选择的训练视频，以及在你主动启用媒体备份后读取你授权范围内的照片和视频。</string>
+	<string>ACE 需要读取你选择的训练视频，用于上传和生成网球分析报告。</string>
 	<key>NSUserNotificationUsageDescription</key>
 	<string>视频提交完成或复盘报告生成后通知你。</string>
 	<key>NSAppTransportSecurity</key>
