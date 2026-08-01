@@ -117,7 +117,7 @@ struct TaskReference: Decodable {
     let status: String
 }
 
-private struct UploadTaskReference: Decodable {
+struct UploadTaskReference: Decodable {
     let id: String
 }
 
