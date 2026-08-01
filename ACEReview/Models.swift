@@ -117,11 +117,15 @@ struct TaskReference: Decodable {
     let status: String
 }
 
+private struct UploadTaskReference: Decodable {
+    let id: String
+}
+
 struct StreamingUploadResponse: Decodable {
-    // The upload-create endpoint intentionally returns a compact task object.
-    // Decoding it as TaskItem made creation fail after the server had already
-    // created the task, leaving an orphaned UPLOADING task with no parts.
-    let task: TaskReference
+    // Upload scheduling only needs the server-generated id. Keeping this
+    // separate from the display task contract prevents optional task fields
+    // from ever blocking the first part request.
+    let task: UploadTaskReference
     let partSize: Int
     let uploadToken: String
 
