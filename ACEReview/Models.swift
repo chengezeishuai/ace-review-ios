@@ -118,7 +118,10 @@ struct TaskReference: Decodable {
 }
 
 struct StreamingUploadResponse: Decodable {
-    let task: TaskItem
+    // The upload-create endpoint intentionally returns a compact task object.
+    // Decoding it as TaskItem made creation fail after the server had already
+    // created the task, leaving an orphaned UPLOADING task with no parts.
+    let task: TaskReference
     let partSize: Int
     let uploadToken: String
 
