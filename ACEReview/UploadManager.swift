@@ -416,9 +416,17 @@ private final class UploadSlot: NSObject, ObservableObject {
     private func reconcileServerState(for manifest: UploadManifest) {
         Task { [weak self] in
             guard let self else { return }
-            guard let remote = try? await APIClient.shared.task(id: manifest.taskID),
-                  remote.status != "uploading" else { return }
-            self.discardCompletedLocalUpload(taskID: manifest.taskID)
+            do {
+                let remote = try await APIClient.shared.task(id: manifest.taskID)
+                guard remote.status != "uploading" else { return }
+                self.discardCompletedLocalUpload(taskID: manifest.taskID)
+            } catch APIClientError.notFound {
+                // A task removed from the service must not leave the client
+                // permanently retrying an upload that no longer has a target.
+                self.discardCompletedLocalUpload(taskID: manifest.taskID)
+            } catch {
+                // Keep resumable state for transient network failures.
+            }
         }
     }
 

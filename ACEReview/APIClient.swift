@@ -2,12 +2,15 @@ import Foundation
 
 enum APIClientError: LocalizedError {
     case invalidResponse
+    case notFound
     case server(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "服务器响应异常"
+        case .notFound:
+            return "任务不存在"
         case .server(let message):
             return message
         }
@@ -51,6 +54,9 @@ final class APIClient {
             throw APIClientError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 404 {
+                throw APIClientError.notFound
+            }
             let detail = serverMessage(data, fallback: "请求失败（\(http.statusCode)）")
             throw APIClientError.server(detail)
         }
