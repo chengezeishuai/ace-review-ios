@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import Photos
+import CoreLocation
 import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
@@ -239,7 +240,11 @@ private final class UploadSlot: NSObject, ObservableObject {
                     mimeType: mime,
                     title: title,
                     player: player,
-                    notes: notes
+                    notes: notes,
+                    capturedAt: asset.creationDate.map { ISO8601DateFormatter().string(from: $0) },
+                    captureLocation: asset.location.map {
+                        String(format: "%.5f, %.5f", $0.coordinate.latitude, $0.coordinate.longitude)
+                    }
                 )
                 let folder = try self.uploadDirectory(taskID: response.task.id)
                 let newManifest = UploadManifest(

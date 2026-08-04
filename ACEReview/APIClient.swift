@@ -183,7 +183,9 @@ final class APIClient {
         mimeType: String,
         title: String,
         player: String,
-        notes: String
+        notes: String,
+        capturedAt: String?,
+        captureLocation: String?
     ) async throws -> StreamingUploadResponse {
         try await request(
             "api/app/uploads",
@@ -193,7 +195,9 @@ final class APIClient {
                 "mimeType": mimeType,
                 "title": title,
                 "player": player,
-                "notes": notes
+                "notes": notes,
+                "capturedAt": capturedAt ?? "",
+                "captureLocation": captureLocation ?? ""
             ]
         )
     }

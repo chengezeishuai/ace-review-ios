@@ -28,6 +28,9 @@ struct TaskItem: Identifiable, Decodable, Hashable {
     let id: String
     let title: String
     let player: String?
+    let notes: String?
+    let capturedAt: String?
+    let captureLocation: String?
     let originalName: String
     let sizeBytes: Int64
     let uploadedBytes: Int64
@@ -44,7 +47,9 @@ struct TaskItem: Identifiable, Decodable, Hashable {
     let rallyURL: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, player, status, stage, progress
+        case id, title, player, notes, status, stage, progress
+        case capturedAt = "captured_at"
+        case captureLocation = "capture_location"
         case analysisMode = "analysis_mode"
         case originalName = "original_name"
         case sizeBytes = "size_bytes"

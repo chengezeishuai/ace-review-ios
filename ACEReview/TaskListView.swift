@@ -5,6 +5,7 @@ struct TaskListView: View {
     @EnvironmentObject private var uploads: UploadManager
     @State private var filter = TaskFilter.all
     @State private var selectedTask: TaskItem?
+    @State private var searchText = ""
 
     var body: some View {
         ZStack {
@@ -12,6 +13,7 @@ struct TaskListView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
                     header
+                    searchField
                     taskFilters
                     if let snapshot = uploads.snapshots.values.first, snapshot.phase != .idle {
                         liveUploadCard(snapshot)
@@ -97,8 +99,35 @@ struct TaskListView: View {
         }
     }
 
+    private var searchField: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "magnifyingglass").foregroundStyle(ACETheme.muted)
+            TextField("训练、运动员、时间或重点关注", text: $searchText)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(ACETheme.muted)
+                }
+            }
+        }
+        .padding(.horizontal, 13).padding(.vertical, 10)
+        .background(ACETheme.paper)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 12).stroke(ACETheme.line, lineWidth: 1) }
+    }
+
     private var visibleTasks: [TaskItem] {
-        taskStore.tasks.filter { filter.matches($0) }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        return taskStore.tasks.filter { task in
+            guard filter.matches(task) else { return false }
+            guard !query.isEmpty else { return true }
+            return [task.title, task.player ?? "", task.notes ?? "", task.createdAt,
+                    task.capturedAt ?? "", task.captureLocation ?? ""]
+                .joined(separator: " ")
+                .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .contains(query)
+        }
     }
 
     private func liveUploadCard(_ snapshot: UploadSnapshot) -> some View {
@@ -177,7 +206,10 @@ private struct LibraryTaskRow: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 HStack { Text(task.title).font(.subheadline.bold()).lineLimit(1); Spacer(); statusBadge }
-                Text(formattedDate(task.createdAt)).font(.caption).foregroundStyle(ACETheme.muted)
+                HStack(spacing: 8) {
+                    Text(formattedDate(task.createdAt))
+                    if let player = task.player, !player.isEmpty { Text("运动员：\(player)").lineLimit(1) }
+                }.font(.caption).foregroundStyle(ACETheme.muted)
                 if task.isActive {
                     ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green)
                     Text("\(Int(displayedProgress.rounded()))% · \(displayMessage)").font(.caption2).foregroundStyle(ACETheme.muted).lineLimit(1)
@@ -208,7 +240,27 @@ private struct LibraryTaskRow: View {
     }
     private var statusBadge: some View { Text(statusName).font(.caption2.bold()).padding(.horizontal, 9).padding(.vertical, 4).foregroundStyle(statusColor).background(statusColor.opacity(0.11)).clipShape(Capsule()) }
     private var statusName: String { switch task.status { case "completed": "已完成"; case "queued": "待分析"; case "uploading", "processing": "分析中"; default: "失败" } }
-    private func formattedDate(_ source: String) -> String { source.replacingOccurrences(of: "T", with: " · ").prefix(16).description }
+    private func formattedDate(_ source: String) -> String { TaskDateFormatter.display(source) }
+}
+
+private enum TaskDateFormatter {
+    static func display(_ source: String) -> String {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var normalized = source.contains("T") ? source : source.replacingOccurrences(of: " ", with: "T")
+        let timePart = normalized.split(separator: "T", maxSplits: 1).last.map(String.init) ?? ""
+        if !normalized.hasSuffix("Z") && !timePart.contains("+") { normalized += "Z" }
+        let date = iso.date(from: normalized) ?? {
+            iso.formatOptions = [.withInternetDateTime]
+            return iso.date(from: normalized)
+        }()
+        guard let date else { return source.replacingOccurrences(of: "T", with: " ").prefix(16).description }
+        let output = DateFormatter()
+        output.locale = Locale(identifier: "zh_CN")
+        output.timeZone = .current
+        output.dateFormat = "yyyy-MM-dd HH:mm"
+        return output.string(from: date)
+    }
 }
 
 private struct TaskProgressView: View {
@@ -295,6 +347,7 @@ private struct ReviewReportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 scoreHeader
+                taskMetadata
                 Text("技术概览").font(.headline).foregroundStyle(ACETheme.ink)
                 HStack(spacing: 10) {
                     ForEach((summary?.metrics ?? []).prefix(3)) { metric in
@@ -353,6 +406,24 @@ private struct ReviewReportView: View {
             if let pdfURL = task.pdfURL {
                 NavigationStack { AuthenticatedWebView(path: pdfURL).navigationTitle("PDF 报告").navigationBarTitleDisplayMode(.inline) }
             }
+        }
+    }
+    @ViewBuilder private var taskMetadata: some View {
+        if [task.capturedAt ?? "", task.captureLocation ?? "", task.notes ?? ""].contains(where: { !$0.isEmpty }) {
+            VStack(alignment: .leading, spacing: 8) {
+            if let capturedAt = task.capturedAt, !capturedAt.isEmpty {
+                Label("拍摄时间：\(TaskDateFormatter.display(capturedAt))", systemImage: "calendar")
+            }
+            if let location = task.captureLocation, !location.isEmpty {
+                Label("拍摄地点：\(location)", systemImage: "mappin.and.ellipse")
+            }
+            if let notes = task.notes, !notes.isEmpty {
+                Label("重点关注：\(notes)", systemImage: "scope")
+            }
+            }
+            .font(.caption).foregroundStyle(ACETheme.muted)
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 14))
         }
     }
     private var scoreHeader: some View {
