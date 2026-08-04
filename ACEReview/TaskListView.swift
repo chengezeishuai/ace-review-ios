@@ -369,7 +369,7 @@ private struct TaskProgressView: View {
             ForEach(cuts) { cut in
                 Button {
                     if cut.isReady { activeCut = cut }
-                    else {
+                    else if cut.state == "queued" || cut.state == "processing" {
                         Task {
                             if let response = try? await APIClient.shared.prioritizeCut(taskID: currentTask.id, cutID: cut.id) {
                                 cuts = response.cuts
@@ -391,6 +391,7 @@ private struct TaskProgressView: View {
                     .padding(13).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
+                .disabled(cut.state == "empty")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
