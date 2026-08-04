@@ -222,6 +222,30 @@ private struct TaskProgressView: View {
     }
 
     var body: some View {
+        Group {
+            if currentTask.isComplete {
+                ReviewReportView(task: currentTask)
+            } else {
+                progressContent
+            }
+        }
+        .task(id: currentTask.id) {
+            while !Task.isCancelled && currentTask.isActive {
+                if let refreshed = await store.detail(id: currentTask.id) {
+                    currentTask = refreshed
+                    if refreshed.isComplete {
+                        await store.load()
+                        break
+                    }
+                }
+                if currentTask.isActive {
+                    try? await Task.sleep(for: .seconds(3))
+                }
+            }
+        }
+    }
+
+    private var progressContent: some View {
         VStack(spacing: 22) {
             Spacer()
             Image(systemName: currentTask.status == "failed" ? "exclamationmark.triangle.fill" : "waveform.path.ecg")
@@ -239,12 +263,6 @@ private struct TaskProgressView: View {
         }
         .padding(28).background(ACETheme.cream.ignoresSafeArea())
         .navigationTitle("分析状态").navigationBarTitleDisplayMode(.inline)
-        .task {
-            while !Task.isCancelled && currentTask.isActive {
-                if let refreshed = await store.detail(id: currentTask.id) { currentTask = refreshed }
-                try? await Task.sleep(for: .seconds(3))
-            }
-        }
     }
 
     private var localUpload: UploadSnapshot? { uploads.snapshot(for: currentTask.id) }
