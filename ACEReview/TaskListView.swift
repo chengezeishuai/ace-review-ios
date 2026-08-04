@@ -6,6 +6,7 @@ struct TaskListView: View {
     @State private var filter = TaskFilter.all
     @State private var selectedTask: TaskItem?
     @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         ZStack {
@@ -51,6 +52,8 @@ struct TaskListView: View {
                 .padding(.top, 12)
                 .padding(.bottom, 30)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .simultaneousGesture(TapGesture().onEnded { isSearchFocused = false })
         }
         .refreshable { await taskStore.load() }
         .task {
@@ -63,6 +66,15 @@ struct TaskListView: View {
         .navigationDestination(item: $selectedTask) { task in
             if task.isComplete { ReviewReportView(task: task) }
             else { TaskProgressView(task: task, store: taskStore) }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button { isSearchFocused = false } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                }
+                .accessibilityLabel("收起键盘")
+            }
         }
     }
 
@@ -88,7 +100,7 @@ struct TaskListView: View {
     private var taskFilters: some View {
         HStack(spacing: 8) {
             ForEach(TaskFilter.allCases) { item in
-                Button(item.title) { filter = item }
+                Button(item.title) { isSearchFocused = false; filter = item }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(filter == item ? .white : ACETheme.ink)
                     .padding(.horizontal, 15).padding(.vertical, 8)
@@ -104,8 +116,11 @@ struct TaskListView: View {
             Image(systemName: "magnifyingglass").foregroundStyle(ACETheme.muted)
             TextField("训练、运动员、时间或重点关注", text: $searchText)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .focused($isSearchFocused)
+                .submitLabel(.done)
+                .onSubmit { isSearchFocused = false }
             if !searchText.isEmpty {
-                Button { searchText = "" } label: {
+                Button { searchText = ""; isSearchFocused = false } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(ACETheme.muted)
                 }
             }
