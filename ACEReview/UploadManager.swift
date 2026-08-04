@@ -235,6 +235,7 @@ private final class UploadSlot: NSObject, ObservableObject {
 
         Task {
             do {
+                let captureLocation = await self.captureLocationText(asset.location)
                 let response = try await APIClient.shared.createStreamingUpload(
                     filename: filename,
                     mimeType: mime,
@@ -242,9 +243,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                     player: player,
                     notes: notes,
                     capturedAt: asset.creationDate.map { ISO8601DateFormatter().string(from: $0) },
-                    captureLocation: asset.location.map {
-                        String(format: "%.5f, %.5f", $0.coordinate.latitude, $0.coordinate.longitude)
-                    }
+                    captureLocation: captureLocation
                 )
                 let folder = try self.uploadDirectory(taskID: response.task.id)
                 let newManifest = UploadManifest(
@@ -583,6 +582,24 @@ private final class UploadSlot: NSObject, ObservableObject {
         lock.unlock()
         guard let uploadToken else { return }
         schedulePart(taskID: taskID, uploadToken: uploadToken, index: index, fileURL: fileURL)
+    }
+
+    private func captureLocationText(_ location: CLLocation?) async -> String? {
+        guard let location else { return nil }
+        if let placemark = try? await CLGeocoder().reverseGeocodeLocation(
+            location,
+            preferredLocale: Locale(identifier: "zh_CN")
+        ).first {
+            let parts = [placemark.administrativeArea, placemark.locality,
+                         placemark.subLocality, placemark.name]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            let unique = parts.reduce(into: [String]()) { values, value in
+                if !values.contains(value) { values.append(value) }
+            }
+            if !unique.isEmpty { return unique.joined(separator: " · ") }
+        }
+        return String(format: "%.5f, %.5f", location.coordinate.latitude, location.coordinate.longitude)
     }
 
     private func schedulePart(taskID: String, uploadToken: String, index: Int, fileURL: URL) {
