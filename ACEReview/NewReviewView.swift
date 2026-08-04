@@ -248,7 +248,7 @@ struct NewReviewView: View {
                     .overlay { if isSubmitting { ProgressView().tint(ACETheme.green) } }
                     .frame(maxWidth: .infinity)
                     .foregroundStyle(ACETheme.green)
-                    .disabled(selectedAsset == nil || uploads.hasActiveUpload || isSubmitting)
+                    .disabled(selectedAsset == nil || !uploads.canStartUpload || isSubmitting)
                 }
             }
             .navigationTitle("提交复盘")
