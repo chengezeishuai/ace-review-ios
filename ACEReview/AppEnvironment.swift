@@ -1,15 +1,80 @@
 import Foundation
 import SwiftUI
+import UIKit
+
+struct ACEPalette: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let primary: String
+    let accent: String
+    let background: String
+    let card: String
+
+    static let presets = [
+        ACEPalette(id: "hard-blue", name: "澳网硬地", primary: "167FAE", accent: "71C9E8", background: "F2F8FB", card: "FFFFFF"),
+        ACEPalette(id: "hard-green", name: "美网硬地", primary: "12865D", accent: "2EBF7B", background: "F1F8F4", card: "FFFFFF"),
+        ACEPalette(id: "grass", name: "温网草地", primary: "3E742F", accent: "86B74B", background: "F4F8EF", card: "FFFFFF"),
+        ACEPalette(id: "clay", name: "法网红土", primary: "A94622", accent: "E26A2C", background: "FBF3EC", card: "FFFDFC")
+    ]
+}
+
+final class ThemeStore: ObservableObject {
+    static let shared = ThemeStore()
+    private let defaults = UserDefaults.standard
+    @Published var selectedID: String { didSet { defaults.set(selectedID, forKey: "ace.theme.id"); revision += 1 } }
+    @Published var customPrimary: String { didSet { defaults.set(customPrimary, forKey: "ace.theme.custom.primary") } }
+    @Published var customAccent: String { didSet { defaults.set(customAccent, forKey: "ace.theme.custom.accent") } }
+    @Published var customBackground: String { didSet { defaults.set(customBackground, forKey: "ace.theme.custom.background") } }
+    @Published var customCard: String { didSet { defaults.set(customCard, forKey: "ace.theme.custom.card") } }
+    @Published private(set) var revision = 0
+
+    private init() {
+        selectedID = defaults.string(forKey: "ace.theme.id") ?? "grass"
+        customPrimary = defaults.string(forKey: "ace.theme.custom.primary") ?? "416D4E"
+        customAccent = defaults.string(forKey: "ace.theme.custom.accent") ?? "9EBD87"
+        customBackground = defaults.string(forKey: "ace.theme.custom.background") ?? "FAFBF6"
+        customCard = defaults.string(forKey: "ace.theme.custom.card") ?? "FFFFFF"
+    }
+
+    var palette: ACEPalette {
+        if selectedID == "custom" {
+            return ACEPalette(id: "custom", name: "自定义", primary: customPrimary, accent: customAccent, background: customBackground, card: customCard)
+        }
+        return ACEPalette.presets.first(where: { $0.id == selectedID }) ?? ACEPalette.presets[2]
+    }
+
+    func applyCustom() {
+        if selectedID == "custom" { revision += 1 }
+        else { selectedID = "custom" }
+    }
+}
+
+extension Color {
+    init(aceHex value: String) {
+        let hex = value.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        let number = UInt64(hex, radix: 16) ?? 0
+        self.init(.sRGB, red: Double((number >> 16) & 0xFF) / 255, green: Double((number >> 8) & 0xFF) / 255, blue: Double(number & 0xFF) / 255, opacity: 1)
+    }
+
+    var aceHex: String {
+        let components = UIColor(self).cgColor.components ?? [0, 0, 0, 1]
+        let red = components[0]
+        let green = components.count > 2 ? components[1] : components[0]
+        let blue = components.count > 2 ? components[2] : components[0]
+        return String(format: "%02X%02X%02X", Int(red * 255), Int(green * 255), Int(blue * 255))
+    }
+}
 
 enum ACETheme {
-    static let ink = Color(red: 0.12, green: 0.17, blue: 0.14)
-    static let green = Color(red: 0.26, green: 0.43, blue: 0.31)
-    static let lime = Color(red: 0.62, green: 0.74, blue: 0.53)
-    static let coral = Color(red: 0.76, green: 0.48, blue: 0.34)
-    static let cream = Color(red: 0.98, green: 0.985, blue: 0.965)
-    static let paper = Color.white
-    static let muted = Color(red: 0.40, green: 0.46, blue: 0.40)
-    static let line = Color(red: 0.84, green: 0.87, blue: 0.81)
+    private static var palette: ACEPalette { ThemeStore.shared.palette }
+    static var ink: Color { Color(aceHex: "17231C") }
+    static var green: Color { Color(aceHex: palette.primary) }
+    static var lime: Color { Color(aceHex: palette.accent) }
+    static var coral: Color { Color(aceHex: palette.accent) }
+    static var cream: Color { Color(aceHex: palette.background) }
+    static var paper: Color { Color(aceHex: palette.card) }
+    static var muted: Color { green.opacity(0.70) }
+    static var line: Color { green.opacity(0.20) }
 }
 
 struct ACEBackground: View {

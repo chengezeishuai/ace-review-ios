@@ -72,6 +72,8 @@ struct ProfileView: View {
             Divider().padding(.leading, 42)
             NavigationLink { PerformanceCenterView() } label: { settingRow("训练表现", "chart.line.uptrend.xyaxis") }
             Divider().padding(.leading, 42)
+            NavigationLink { ThemePaletteView() } label: { settingRow("主题配色", "paintpalette") }
+            Divider().padding(.leading, 42)
             NavigationLink { SupportView() } label: { settingRow("帮助与支持", "questionmark.circle") }
         }
         .padding(.vertical, 4).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay { RoundedRectangle(cornerRadius: 16).stroke(ACETheme.line, lineWidth: 1) }
