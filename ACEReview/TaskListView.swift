@@ -281,7 +281,7 @@ private struct TaskProgressView: View {
                 progressContent
             }
         }
-        .task(id: currentTask.id) {
+        .task(id: "\(currentTask.id)-\(currentTask.status)") {
             while !Task.isCancelled && currentTask.isActive {
                 if let refreshed = await store.detail(id: currentTask.id) {
                     currentTask = refreshed
@@ -310,7 +310,17 @@ private struct TaskProgressView: View {
                 ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green).padding(.horizontal, 42)
                 Text("\(Int(displayedProgress.rounded()))% · 状态会自动刷新").font(.caption).foregroundStyle(ACETheme.muted)
             }
-            if currentTask.status == "failed" { Button("重新分析") { Task { await store.retry(currentTask) } }.buttonStyle(PrimaryButtonStyle()) }
+            if currentTask.status == "failed" {
+                Button(store.retryingTaskIDs.contains(currentTask.id) ? "正在重新分析..." : "重新分析") {
+                    Task {
+                        if let retried = await store.retry(currentTask) {
+                            currentTask = retried
+                        }
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(store.retryingTaskIDs.contains(currentTask.id))
+            }
             Spacer()
         }
         .padding(28).background(ACETheme.cream.ignoresSafeArea())

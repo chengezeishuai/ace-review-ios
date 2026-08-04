@@ -40,9 +40,10 @@ final class TaskStore: ObservableObject {
         }
     }
 
-    func retry(_ task: TaskItem) async {
+    @discardableResult
+    func retry(_ task: TaskItem) async -> TaskItem? {
         guard task.status == "failed", !workingTaskIDs.contains(task.id) else {
-            return
+            return nil
         }
         workingTaskIDs.insert(task.id)
         retryingTaskIDs.insert(task.id)
@@ -51,10 +52,12 @@ final class TaskStore: ObservableObject {
             workingTaskIDs.remove(task.id)
         }
         do {
-            _ = try await APIClient.shared.retryTask(id: task.id)
+            let retried = try await APIClient.shared.retryTask(id: task.id)
             await load()
+            return retried
         } catch {
             loadState = .failed(error.localizedDescription)
+            return nil
         }
     }
 
