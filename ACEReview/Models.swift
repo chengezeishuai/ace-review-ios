@@ -107,6 +107,44 @@ struct ReportSummary: Decodable {
     }
 }
 
+struct ProgressiveCutsResponse: Decodable {
+    let cuts: [ProgressiveCut]
+    let totalCount: Int
+    let readyCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case cuts
+        case totalCount = "total_count"
+        case readyCount = "ready_count"
+    }
+}
+
+struct ProgressiveCut: Identifiable, Decodable, Hashable {
+    let id: String
+    let label: String
+    let start: Double
+    let end: Double
+    let timestamp: Double
+    let state: String
+    let priority: Bool
+    let viewerURL: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, start, end, timestamp, state, priority
+        case viewerURL = "viewer_url"
+    }
+
+    var isReady: Bool { state == "ready" }
+    var stateLabel: String {
+        switch state {
+        case "ready": return "可查看"
+        case "processing": return "分析中"
+        case "empty": return "未识别到击球"
+        default: return priority ? "优先等待" : "等待分析"
+        }
+    }
+}
+
 struct EvidenceCreateResponse: Decodable {
     let task: TaskReference
     let frameCount: Int

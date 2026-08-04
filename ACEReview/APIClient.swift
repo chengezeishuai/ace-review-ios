@@ -117,6 +117,14 @@ final class APIClient {
         try await request("api/app/tasks/\(taskID)/report/summary")
     }
 
+    func progressiveCuts(taskID: String) async throws -> ProgressiveCutsResponse {
+        try await request("api/app/tasks/\(taskID)/cuts")
+    }
+
+    func prioritizeCut(taskID: String, cutID: String) async throws -> ProgressiveCutsResponse {
+        try await request("api/app/tasks/\(taskID)/cuts/\(cutID)/prioritize", method: "POST")
+    }
+
     func comments(taskID: String) async throws -> CoachCommentEnvelope {
         try await request("api/app/tasks/\(taskID)/comments")
     }

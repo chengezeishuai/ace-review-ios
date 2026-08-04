@@ -259,6 +259,11 @@ private struct LibraryTaskRow: View {
 }
 
 private enum TaskDateFormatter {
+    static func cutTime(_ seconds: Double) -> String {
+        let whole = max(0, Int(seconds.rounded(.down)))
+        return String(format: "%02d:%02d", whole / 60, whole % 60)
+    }
+
     static func display(_ source: String) -> String {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -280,6 +285,8 @@ private enum TaskDateFormatter {
 
 private struct TaskProgressView: View {
     @State private var currentTask: TaskItem
+    @State private var cuts: [ProgressiveCut] = []
+    @State private var activeCut: ProgressiveCut?
     @ObservedObject var store: TaskStore
     @EnvironmentObject private var uploads: UploadManager
 
@@ -300,6 +307,9 @@ private struct TaskProgressView: View {
             while !Task.isCancelled && currentTask.isActive {
                 if let refreshed = await store.detail(id: currentTask.id) {
                     currentTask = refreshed
+                    if let response = try? await APIClient.shared.progressiveCuts(taskID: currentTask.id) {
+                        cuts = response.cuts
+                    }
                     if refreshed.isComplete {
                         await store.load()
                         break
@@ -310,11 +320,18 @@ private struct TaskProgressView: View {
                 }
             }
         }
+        .sheet(item: $activeCut) { cut in
+            NavigationStack {
+                AuthenticatedWebView(path: cut.viewerURL)
+                    .navigationTitle(cut.label)
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        }
     }
 
     private var progressContent: some View {
+        ScrollView {
         VStack(spacing: 22) {
-            Spacer()
             Image(systemName: currentTask.status == "failed" ? "exclamationmark.triangle.fill" : "waveform.path.ecg")
                 .font(.system(size: 50)).foregroundStyle(currentTask.status == "failed" ? .red : ACETheme.green)
                 .symbolEffect(.variableColor.iterative, isActive: currentTask.isActive)
@@ -336,10 +353,47 @@ private struct TaskProgressView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(store.retryingTaskIDs.contains(currentTask.id))
             }
-            Spacer()
+            if !cuts.isEmpty { progressiveCutList }
         }
-        .padding(28).background(ACETheme.cream.ignoresSafeArea())
+        .padding(28)
+        }
+        .background(ACETheme.cream.ignoresSafeArea())
         .navigationTitle("分析状态").navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var progressiveCutList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("训练片段").font(.headline).foregroundStyle(ACETheme.ink)
+            Text("已完成的片段可立即查看；点选未完成片段会优先分析。")
+                .font(.caption).foregroundStyle(ACETheme.muted)
+            ForEach(cuts) { cut in
+                Button {
+                    if cut.isReady { activeCut = cut }
+                    else {
+                        Task {
+                            if let response = try? await APIClient.shared.prioritizeCut(taskID: currentTask.id, cutID: cut.id) {
+                                cuts = response.cuts
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: cut.isReady ? "play.circle.fill" : "clock.arrow.circlepath")
+                            .font(.title3).foregroundStyle(cut.isReady ? ACETheme.green : ACETheme.muted)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(cut.label).font(.subheadline.bold()).foregroundStyle(ACETheme.ink)
+                            Text("\(TaskDateFormatter.cutTime(cut.start)) - \(TaskDateFormatter.cutTime(cut.end))")
+                                .font(.caption).foregroundStyle(ACETheme.muted)
+                        }
+                        Spacer()
+                        Text(cut.stateLabel).font(.caption.bold()).foregroundStyle(cut.isReady ? ACETheme.green : ACETheme.muted)
+                    }
+                    .padding(13).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var localUpload: UploadSnapshot? { uploads.snapshot(for: currentTask.id) }
