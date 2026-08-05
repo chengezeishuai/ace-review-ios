@@ -12,6 +12,12 @@ struct NewReviewView: View {
     @State private var analysisScope = "full_report"
     @State private var isSubmitting = false
     @State private var uploadError = ""
+    @State private var athleteGender = ""
+    @State private var athleteLevel = ""
+    @State private var athleteProfiles = AthleteProfileStore.load()
+    @State private var videoProfiles = VideoProfileStore.load()
+    @State private var showAthleteProfiles = false
+    @State private var showVideoProfiles = false
     let onSubmitted: () -> Void
 
     init(onSubmitted: @escaping () -> Void = {}) {
@@ -64,6 +70,20 @@ struct NewReviewView: View {
         }
         .sheet(isPresented: $showDetails) {
             detailsSheet
+        }
+        .sheet(isPresented: $showAthleteProfiles) {
+            AthleteProfilesSheet(profiles: $athleteProfiles) { profile in
+                player = profile.name
+                athleteGender = profile.gender
+                athleteLevel = profile.level
+            }
+        }
+        .sheet(isPresented: $showVideoProfiles) {
+            VideoProfilesSheet(profiles: $videoProfiles) { profile in
+                title = profile.title
+                notes = profile.notes
+                analysisScope = profile.scope
+            }
         }
     }
 
@@ -217,9 +237,44 @@ struct NewReviewView: View {
         NavigationStack {
             Form {
                 Section("视频信息") {
+                    HStack {
+                        Text("视频信息")
+                        Spacer()
+                        Button("选择模板") { showVideoProfiles = true }
+                            .font(.caption.weight(.semibold))
+                    }
                     TextField("复盘名称", text: $title)
-                    TextField("运动员（选填）", text: $player)
+                    HStack {
+                        TextField("运动员（选填）", text: $player)
+                        Button { showAthleteProfiles = true } label: {
+                            Image(systemName: "person.crop.circle.badge.plus")
+                        }
+                        .buttonStyle(.borderless)
+                    }
                     TextField("想重点查看什么（选填）", text: $notes, axis: .vertical)
+                    Button("保存当前视频信息") {
+                        videoProfiles.append(VideoProfile(title: title, notes: notes, scope: analysisScope))
+                        VideoProfileStore.save(videoProfiles)
+                    }
+                    .font(.caption.weight(.semibold))
+                }
+                Section("运动员信息（可选）") {
+                    HStack {
+                        Text("性别")
+                        Spacer()
+                        Picker("性别", selection: $athleteGender) {
+                            Text("未选择").tag(""); Text("女").tag("女"); Text("男").tag("男"); Text("其他").tag("其他")
+                        }.labelsHidden()
+                    }
+                    HStack {
+                        Text("基础")
+                        Spacer()
+                        Picker("基础", selection: $athleteLevel) {
+                            Text("未选择").tag(""); Text("初学").tag("初学"); Text("业余进阶").tag("业余进阶"); Text("比赛训练").tag("比赛训练")
+                        }.labelsHidden()
+                    }
+                    Button("新建 / 管理运动员资料") { showAthleteProfiles = true }
+                        .font(.caption.weight(.semibold))
                 }
                 Section {
                     Picker("分析范围", selection: $analysisScope) {
@@ -239,7 +294,7 @@ struct NewReviewView: View {
                             asset: asset,
                             title: title,
                             player: player,
-                            notes: notes,
+                            notes: composedNotes,
                             analysisScope: analysisScope,
                             onTaskCreated: { _ in
                                 isSubmitting = false
@@ -291,5 +346,68 @@ struct NewReviewView: View {
 
     private func durationText(_ value: TimeInterval) -> String {
         String(format: "%d:%02d", Int(value) / 60, Int(value) % 60)
+    }
+
+    private var composedNotes: String {
+        let profile = [athleteGender.isEmpty ? nil : "性别：\(athleteGender)", athleteLevel.isEmpty ? nil : "基础：\(athleteLevel)"]
+            .compactMap { $0 }.joined(separator: "，")
+        return profile.isEmpty ? notes : (notes.isEmpty ? "运动员信息：\(profile)" : "运动员信息：\(profile)\n\(notes)")
+    }
+}
+
+struct AthleteProfile: Codable, Identifiable { var id = UUID(); var name: String; var gender: String; var level: String }
+struct VideoProfile: Codable, Identifiable { var id = UUID(); var title: String; var notes: String; var scope: String }
+
+enum AthleteProfileStore {
+    static let key = "ace.athlete.profiles"
+    static func load() -> [AthleteProfile] { guard let data = UserDefaults.standard.data(forKey: key), let value = try? JSONDecoder().decode([AthleteProfile].self, from: data) else { return [] }; return value }
+    static func save(_ value: [AthleteProfile]) { UserDefaults.standard.set(try? JSONEncoder().encode(value), forKey: key) }
+}
+enum VideoProfileStore {
+    static let key = "ace.video.profiles"
+    static func load() -> [VideoProfile] { guard let data = UserDefaults.standard.data(forKey: key), let value = try? JSONDecoder().decode([VideoProfile].self, from: data) else { return [] }; return value }
+    static func save(_ value: [VideoProfile]) { UserDefaults.standard.set(try? JSONEncoder().encode(value), forKey: key) }
+}
+
+struct AthleteProfilesSheet: View {
+    @Binding var profiles: [AthleteProfile]
+    let onSelect: (AthleteProfile) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var gender = ""
+    @State private var level = ""
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("已保存资料") {
+                    ForEach(profiles) { profile in
+                        Button { onSelect(profile); dismiss() } label: { VStack(alignment: .leading) { Text(profile.name); Text([profile.gender, profile.level].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) } }
+                    }.onDelete { profiles.remove(atOffsets: $0); AthleteProfileStore.save(profiles) }
+                }
+                Section("新建运动员") {
+                    TextField("姓名或昵称", text: $name)
+                    TextField("性别（可选）", text: $gender)
+                    TextField("基础（可选）", text: $level)
+                    Button("保存") { guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }; profiles.append(AthleteProfile(name: name, gender: gender, level: level)); AthleteProfileStore.save(profiles); name = ""; gender = ""; level = "" }
+                }
+            }.navigationTitle("运动员资料").toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
+        }
+    }
+}
+
+struct VideoProfilesSheet: View {
+    @Binding var profiles: [VideoProfile]
+    let onSelect: (VideoProfile) -> Void
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("已保存视频信息") {
+                    ForEach(profiles) { profile in
+                        Button { onSelect(profile); dismiss() } label: { VStack(alignment: .leading) { Text(profile.title); Text(profile.scope == "cuts_only" ? "先生成 Cut" : "完整报告").font(.caption).foregroundStyle(.secondary) } }
+                    }.onDelete { profiles.remove(atOffsets: $0); VideoProfileStore.save(profiles) }
+                }
+            }.navigationTitle("视频信息模板").toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
+        }
     }
 }
