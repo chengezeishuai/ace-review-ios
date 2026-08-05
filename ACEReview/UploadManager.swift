@@ -107,6 +107,12 @@ private final class UploadSlot: NSObject, ObservableObject {
     private var preparationTimer: Timer?
     private var preparationStartedAt: Date?
     private var responseBodies: [Int: Data] = [:]
+    private var waitingForUploadGate = false
+    private var holdsUploadGate = false
+
+    // Photos resource reads and local part generation are serialized. Network
+    // upload still uses the existing background URLSession after each part is ready.
+    private static let uploadGate = DispatchSemaphore(value: 1)
 
     // The Photos import can take longer than the visible preparation period.
     // Keep the first 0-15% bounded, then make it clear that background upload
@@ -269,7 +275,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                     self.activeTaskID = response.task.id
                     onTaskCreated(response.task.id)
                 }
-                self.startReading(
+                self.startReadingWhenAvailable(
                     asset: asset,
                     resource: resource,
                     directory: folder,
@@ -351,6 +357,11 @@ private final class UploadSlot: NSObject, ObservableObject {
                       self.snapshot.phase != .failed else {
                     timer.invalidate()
                     self?.preparationTimer = nil
+                    return
+                }
+                if self.waitingForUploadGate {
+                    self.snapshot.isShowingPreparation = true
+                    self.snapshot.message = "排队中，等待前一个视频上传完成"
                     return
                 }
                 let elapsed = Date().timeIntervalSince(startedAt)
@@ -436,6 +447,7 @@ private final class UploadSlot: NSObject, ObservableObject {
     }
 
     private func discardCompletedLocalUpload(taskID: String) {
+        releaseUploadGate()
         backgroundSession.getAllTasks { [weak self] tasks in
             guard let self else { return }
             for task in tasks where task.taskDescription?.contains("|\(taskID)|") == true {
@@ -583,6 +595,51 @@ private final class UploadSlot: NSObject, ObservableObject {
         lock.unlock()
         guard let uploadToken else { return }
         schedulePart(taskID: taskID, uploadToken: uploadToken, index: index, fileURL: fileURL)
+    }
+
+    private func startReadingWhenAvailable(
+        asset: PHAsset,
+        resource: PHAssetResource,
+        directory: URL,
+        manifest: UploadManifest
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let immediatelyAvailable = Self.uploadGate.wait(timeout: .now()) == .success
+            if !immediatelyAvailable {
+                self.waitingForUploadGate = true
+                self.publish {
+                    self.snapshot.isShowingPreparation = true
+                    self.snapshot.message = "排队中，等待前一个视频上传完成"
+                }
+                Self.uploadGate.wait()
+            }
+            self.lock.lock()
+            self.waitingForUploadGate = false
+            self.holdsUploadGate = true
+            self.lock.unlock()
+            self.publish {
+                self.snapshot.isShowingPreparation = true
+                self.snapshot.message = Self.preparationMessage
+            }
+            self.startReading(
+                asset: asset,
+                resource: resource,
+                directory: directory,
+                manifest: manifest
+            )
+        }
+    }
+
+    private func releaseUploadGate() {
+        lock.lock()
+        guard holdsUploadGate else {
+            lock.unlock()
+            return
+        }
+        holdsUploadGate = false
+        lock.unlock()
+        Self.uploadGate.signal()
     }
 
     private func captureLocationText(_ location: CLLocation?) async -> String? {
@@ -768,6 +825,7 @@ private final class UploadSlot: NSObject, ObservableObject {
     }
 
     private func completeUpload(taskID: String) {
+        releaseUploadGate()
         stopPreparationProgress()
         let folder = directoryForExistingTask(taskID)
         try? FileManager.default.removeItem(at: folder)
@@ -798,6 +856,7 @@ private final class UploadSlot: NSObject, ObservableObject {
     }
 
     private func publishError(_ message: String) {
+        releaseUploadGate()
         stopPreparationProgress()
         publish {
             self.lastError = message

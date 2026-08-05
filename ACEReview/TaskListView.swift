@@ -254,7 +254,15 @@ private struct LibraryTaskRow: View {
         return localUpload.message
     }
     private var statusBadge: some View { Text(statusName).font(.caption2.bold()).padding(.horizontal, 9).padding(.vertical, 4).foregroundStyle(statusColor).background(statusColor.opacity(0.11)).clipShape(Capsule()) }
-    private var statusName: String { switch task.status { case "completed": "已完成"; case "queued": "待分析"; case "uploading", "processing": "分析中"; default: "失败" } }
+    private var statusName: String {
+        if localUpload?.message.hasPrefix("排队中") == true { return "排队中" }
+        switch task.status {
+        case "completed": return "已完成"
+        case "queued": return "待分析"
+        case "uploading", "processing": return "分析中"
+        default: return "失败"
+        }
+    }
     private func formattedDate(_ source: String) -> String { TaskDateFormatter.display(source) }
 }
 
