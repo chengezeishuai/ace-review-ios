@@ -70,6 +70,13 @@ struct NewReviewView: View {
         .sheet(isPresented: $showDetails) {
             detailsSheet
         }
+        .sheet(isPresented: $showAthleteProfiles) {
+            AthleteProfilesSheet(profiles: $athleteProfiles) { profile in
+                player = profile.name
+                athleteGender = profile.gender
+                athleteLevel = profile.level
+            }
+        }
     }
 
     private var activeTaskID: String {
@@ -301,14 +308,9 @@ struct NewReviewView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showDetails = false } } }
             .scrollDismissesKeyboard(.interactively)
+            .contentShape(Rectangle())
+            .onTapGesture { dismissKeyboard() }
             .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("收起键盘") { focusedField = nil } } }
-            .sheet(isPresented: $showAthleteProfiles) {
-                AthleteProfilesSheet(profiles: $athleteProfiles) { profile in
-                    player = profile.name
-                    athleteGender = profile.gender
-                    athleteLevel = profile.level
-                }
-            }
             .alert("提交未完成", isPresented: Binding(get: { !uploadError.isEmpty }, set: { if !$0 { uploadError = "" } })) {
                 Button("知道了", role: .cancel) {}
             } message: {
