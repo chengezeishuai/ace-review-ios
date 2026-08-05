@@ -526,9 +526,9 @@ private struct ReviewReportView: View {
     private var scoreHeader: some View {
         HStack(spacing: 18) {
             let score = summary?.overallScore
-            ZStack { Circle().stroke(ACETheme.line, lineWidth: 9); Circle().trim(from: 0, to: CGFloat((score ?? 0) / 100)).stroke(ACETheme.green, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90)); VStack(spacing: 1) { Text(score.map { String(Int($0.rounded())) } ?? "--").font(.system(size: 32, weight: .bold)); Text("综合评分").font(.caption2) } }
+            ZStack { Circle().stroke(ACETheme.line, lineWidth: 9); Circle().trim(from: 0, to: CGFloat((score ?? 0) / 100)).stroke(ACETheme.green, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90)); VStack(spacing: 1) { Text(score.map { String(Int($0.rounded())) } ?? "--").font(.system(size: 32, weight: .bold)); Text(score == nil ? "暂无评分" : "综合评分").font(.caption2) } }
                 .frame(width: 112, height: 112).foregroundStyle(ACETheme.green)
-            VStack(alignment: .leading, spacing: 5) { Text(task.title).font(.title3.bold()).foregroundStyle(ACETheme.ink); Text(task.player?.isEmpty == false ? task.player! : "训练复盘").font(.caption).foregroundStyle(ACETheme.muted); Label("已完成", systemImage: "checkmark.seal.fill").font(.caption.bold()).foregroundStyle(ACETheme.green) }
+            VStack(alignment: .leading, spacing: 5) { Text(task.title).font(.title3.bold()).foregroundStyle(ACETheme.ink); Text(task.player?.isEmpty == false ? task.player! : "训练复盘").font(.caption).foregroundStyle(ACETheme.muted); Label("已完成", systemImage: "checkmark.seal.fill").font(.caption.bold()).foregroundStyle(ACETheme.green); if score == nil { Text("尚未进行逐拍分析，暂无评分").font(.caption).foregroundStyle(ACETheme.muted) } }
             Spacer()
         }
         .padding(17).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay { RoundedRectangle(cornerRadius: 16).stroke(ACETheme.line, lineWidth: 1) }
