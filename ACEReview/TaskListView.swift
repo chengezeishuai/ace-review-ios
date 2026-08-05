@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 
 struct TaskListView: View {
     @ObservedObject var taskStore: TaskStore
@@ -440,6 +441,8 @@ private struct ReviewReportView: View {
     @State private var showVideo = false
     @State private var showPDF = false
     @State private var loadError = ""
+    @State private var reportCuts: [ProgressiveCut] = []
+    @State private var generatingCutID: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -453,6 +456,38 @@ private struct ReviewReportView: View {
                     }
                 }
                 Text(summary?.summary ?? "报告正在载入。").font(.subheadline).foregroundStyle(ACETheme.muted).padding(16).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 14))
+                if !reportCuts.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("逐拍分析").font(.headline).foregroundStyle(ACETheme.ink)
+                        Text("选择一个回合后生成逐拍报告，生成完成后会自动出现在完整报告中。")
+                            .font(.caption).foregroundStyle(ACETheme.muted)
+                        ForEach(reportCuts) { cut in
+                            Button {
+                                guard generatingCutID == nil else { return }
+                                generatingCutID = cut.id
+                                Task {
+                                    do { _ = try await APIClient.shared.analyzeCut(taskID: task.id, cutID: cut.id) }
+                                    catch { loadError = error.localizedDescription }
+                                    generatingCutID = nil
+                                }
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(cut.label).font(.subheadline.bold())
+                                        Text("\(TaskDateFormatter.cutTime(cut.start)) - \(TaskDateFormatter.cutTime(cut.end))")
+                                            .font(.caption).foregroundStyle(ACETheme.muted)
+                                    }
+                                    Spacer()
+                                    Text(generatingCutID == cut.id ? "生成中…" : "生成逐拍")
+                                        .font(.caption.bold()).foregroundStyle(ACETheme.green)
+                                }
+                                .padding(13).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(generatingCutID != nil)
+                        }
+                    }
+                }
                 if !loadError.isEmpty {
                     Label(loadError, systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote).foregroundStyle(.red)
@@ -486,7 +521,10 @@ private struct ReviewReportView: View {
         .background(ACETheme.cream.ignoresSafeArea())
         .navigationTitle("复盘报告").navigationBarTitleDisplayMode(.inline)
         .task {
-            do { summary = try await APIClient.shared.reportSummary(taskID: task.id) }
+            do {
+                summary = try await APIClient.shared.reportSummary(taskID: task.id)
+                reportCuts = (try? await APIClient.shared.progressiveCuts(taskID: task.id).cuts) ?? []
+            }
             catch { loadError = error.localizedDescription }
         }
         .sheet(isPresented: $showFullReport) {
@@ -496,7 +534,7 @@ private struct ReviewReportView: View {
         }
         .sheet(isPresented: $showVideo) {
             if let videoURL = task.videoURL {
-                NavigationStack { AuthenticatedWebView(path: videoURL).navigationTitle("训练视频").navigationBarTitleDisplayMode(.inline) }
+                NavigationStack { AuthenticatedVideoView(path: videoURL).navigationTitle("训练视频").navigationBarTitleDisplayMode(.inline) }
             }
         }
         .sheet(isPresented: $showPDF) {
@@ -532,6 +570,38 @@ private struct ReviewReportView: View {
             Spacer()
         }
         .padding(17).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay { RoundedRectangle(cornerRadius: 16).stroke(ACETheme.line, lineWidth: 1) }
+    }
+}
+
+private struct AuthenticatedVideoView: View {
+    let path: String
+    @State private var player: AVPlayer?
+    @State private var error = ""
+
+    var body: some View {
+        Group {
+            if let player {
+                VideoPlayer(player: player).background(Color.black).ignoresSafeArea()
+            } else if !error.isEmpty {
+                ContentUnavailableView("视频暂时无法播放", systemImage: "video.slash", description: Text(error))
+            } else {
+                ProgressView("正在加载视频…")
+            }
+        }
+        .task {
+            guard player == nil else { return }
+            do {
+                var request = URLRequest(url: APIClient.shared.url(for: path))
+                request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
+                if let token = KeychainStore.get("accessToken") { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+                let (localURL, response) = try await URLSession.shared.download(for: request)
+                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw APIClientError.server("视频权限验证失败") }
+                let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
+                try? FileManager.default.removeItem(at: destination)
+                try FileManager.default.moveItem(at: localURL, to: destination)
+                player = AVPlayer(url: destination)
+            } catch { error = error.localizedDescription }
+        }
     }
 }
 
