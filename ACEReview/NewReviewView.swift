@@ -9,6 +9,7 @@ struct NewReviewView: View {
     @State private var title = ""
     @State private var player = ""
     @State private var notes = ""
+    @State private var analysisScope = "full_report"
     @State private var isSubmitting = false
     @State private var uploadError = ""
     let onSubmitted: () -> Void
@@ -221,6 +222,15 @@ struct NewReviewView: View {
                     TextField("想重点查看什么（选填）", text: $notes, axis: .vertical)
                 }
                 Section {
+                    Picker("分析范围", selection: $analysisScope) {
+                        Text("完整报告").tag("full_report")
+                        Text("仅生成 Cut").tag("cuts_only")
+                    }
+                    .pickerStyle(.segmented)
+                    Text(analysisScope == "cuts_only" ? "适合长视频：生成可回看的训练片段，不展开逐拍报告。" : "生成完整逐拍报告，并同时提供 Cut 回看。")
+                        .font(.caption).foregroundStyle(ACETheme.muted)
+                }
+                Section {
                     Button(isSubmitting ? "正在创建任务..." : "开始云端分析") {
                         guard let asset = selectedAsset else { return }
                         isSubmitting = true
@@ -230,6 +240,7 @@ struct NewReviewView: View {
                             title: title,
                             player: player,
                             notes: notes,
+                            analysisScope: analysisScope,
                             onTaskCreated: { _ in
                                 isSubmitting = false
                                 showDetails = false
@@ -237,6 +248,7 @@ struct NewReviewView: View {
                                 title = ""
                                 player = ""
                                 notes = ""
+                                analysisScope = "full_report"
                                 onSubmitted()
                             },
                             onFailure: { message in

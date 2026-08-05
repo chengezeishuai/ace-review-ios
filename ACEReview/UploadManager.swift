@@ -206,6 +206,7 @@ private final class UploadSlot: NSObject, ObservableObject {
         title: String,
         player: String,
         notes: String,
+        analysisScope: String,
         onTaskCreated: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (String) -> Void = { _ in }
     ) {
@@ -250,7 +251,8 @@ private final class UploadSlot: NSObject, ObservableObject {
                     notes: notes,
                     capturedAt: asset.creationDate.map { ISO8601DateFormatter().string(from: $0) },
                     captureLocation: captureLocation,
-                    reportTheme: ThemeStore.shared.palette
+                    reportTheme: ThemeStore.shared.palette,
+                    analysisScope: analysisScope
                 )
                 let folder = try self.uploadDirectory(taskID: response.task.id)
                 let newManifest = UploadManifest(
