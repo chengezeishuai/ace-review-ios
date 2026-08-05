@@ -386,8 +386,18 @@ struct AthleteProfilesSheet: View {
                 }
                 Section("新建运动员") {
                     TextField("姓名或昵称", text: $name)
-                    TextField("性别（可选）", text: $gender)
-                    TextField("基础（可选）", text: $level)
+                    Picker("性别", selection: $gender) {
+                        Text("未选择").tag("")
+                        Text("女").tag("女")
+                        Text("男").tag("男")
+                        Text("其他").tag("其他")
+                    }
+                    Picker("基础", selection: $level) {
+                        Text("未选择").tag("")
+                        Text("初学").tag("初学")
+                        Text("业余进阶").tag("业余进阶")
+                        Text("比赛训练").tag("比赛训练")
+                    }
                     Button("保存") { guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }; profiles.append(AthleteProfile(name: name, gender: gender, level: level)); AthleteProfileStore.save(profiles); name = ""; gender = ""; level = "" }
                 }
             }.navigationTitle("运动员资料").toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
