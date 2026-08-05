@@ -296,6 +296,7 @@ private struct TaskProgressView: View {
     @State private var cuts: [ProgressiveCut] = []
     @State private var activeCut: ProgressiveCut?
     @State private var analyzingCutID: String?
+    @State private var cutError = ""
     @ObservedObject var store: TaskStore
     @EnvironmentObject private var uploads: UploadManager
 
@@ -362,7 +363,9 @@ private struct TaskProgressView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(store.retryingTaskIDs.contains(currentTask.id))
             }
-            if !cuts.isEmpty { progressiveCutList }
+            // Progressive cuts are an internal processing artifact. Displaying
+            // them before completion makes every row look clickable while the
+            // report and source media are still being assembled.
         }
         .padding(28)
         }
@@ -377,14 +380,14 @@ private struct TaskProgressView: View {
                 .font(.caption).foregroundStyle(ACETheme.muted)
             ForEach(cuts) { cut in
                 Button {
-                    if cut.state == "queued" || cut.state == "processing" || cut.isReady {
-                        Task {
-                            analyzingCutID = cut.id
-                            if let focusedTask = try? await APIClient.shared.analyzeCut(taskID: currentTask.id, cutID: cut.id) {
-                                currentTask = focusedTask
-                            } else {
-                                analyzingCutID = nil
-                            }
+                    guard analyzingCutID == nil else { return }
+                    Task {
+                        analyzingCutID = cut.id
+                        do {
+                            currentTask = try await APIClient.shared.analyzeCut(taskID: currentTask.id, cutID: cut.id)
+                        } catch {
+                            cutError = error.localizedDescription
+                            analyzingCutID = nil
                         }
                     }
                 } label: {
@@ -406,6 +409,9 @@ private struct TaskProgressView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .alert("逐拍分析未提交", isPresented: Binding(get: { !cutError.isEmpty }, set: { if !$0 { cutError = "" } })) {
+            Button("知道了", role: .cancel) { cutError = "" }
+        } message: { Text(cutError) }
     }
 
     private var localUpload: UploadSnapshot? { uploads.snapshot(for: currentTask.id) }
