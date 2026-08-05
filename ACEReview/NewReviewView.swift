@@ -15,9 +15,7 @@ struct NewReviewView: View {
     @State private var athleteGender = ""
     @State private var athleteLevel = ""
     @State private var athleteProfiles = AthleteProfileStore.load()
-    @State private var videoProfiles = VideoProfileStore.load()
     @State private var showAthleteProfiles = false
-    @State private var showVideoProfiles = false
     @FocusState private var focusedField: DetailField?
     let onSubmitted: () -> Void
 
@@ -77,13 +75,6 @@ struct NewReviewView: View {
                 player = profile.name
                 athleteGender = profile.gender
                 athleteLevel = profile.level
-            }
-        }
-        .sheet(isPresented: $showVideoProfiles) {
-            VideoProfilesSheet(profiles: $videoProfiles) { profile in
-                title = profile.title
-                notes = profile.notes
-                analysisScope = profile.scope
             }
         }
     }
@@ -238,18 +229,14 @@ struct NewReviewView: View {
         NavigationStack {
             Form {
                 Section("视频信息") {
-                    HStack {
-                        Text("视频信息")
-                        Spacer()
-                        Button("选择 / 管理") { focusedField = nil; showVideoProfiles = true }
-                            .font(.caption.weight(.semibold))
-                    }
                     TextField("复盘名称", text: $title).focused($focusedField, equals: .title)
                     TextField("想重点查看什么（选填）", text: $notes, axis: .vertical).focused($focusedField, equals: .notes)
                 }
                 Section("运动员信息（可选）") {
+                    Text("选择运动员后，系统会结合其性别和基础水平给出更贴合的分析建议。")
+                        .font(.caption).foregroundStyle(ACETheme.muted)
                     HStack {
-                        Text("运动员")
+                        Text("选择运动员").font(.subheadline)
                         Spacer()
                         Menu {
                             Button("未选择") { player = ""; athleteGender = ""; athleteLevel = "" }
@@ -257,11 +244,14 @@ struct NewReviewView: View {
                                 Button(profile.name) { player = profile.name; athleteGender = profile.gender; athleteLevel = profile.level }
                             }
                             Divider()
-                            Button("新建 / 管理运动员") { focusedField = nil; showAthleteProfiles = true }
                         } label: {
                             Text(player.isEmpty ? "选择运动员" : player).foregroundStyle(ACETheme.green)
                         }
                     }
+                    Button { focusedField = nil; showAthleteProfiles = true } label: {
+                        Label("新建或管理运动员资料", systemImage: "person.crop.circle.badge.plus")
+                    }
+                    .font(.subheadline.weight(.semibold))
                     if !athleteGender.isEmpty || !athleteLevel.isEmpty {
                         Text([athleteGender, athleteLevel].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(ACETheme.muted)
@@ -351,19 +341,12 @@ struct NewReviewView: View {
 
 private enum DetailField: Hashable { case title, notes }
 struct AthleteProfile: Codable, Identifiable { var id = UUID(); var name: String; var gender: String; var level: String }
-struct VideoProfile: Codable, Identifiable { var id = UUID(); var title: String; var notes: String; var scope: String }
 
 enum AthleteProfileStore {
     static let key = "ace.athlete.profiles"
     static func load() -> [AthleteProfile] { guard let data = UserDefaults.standard.data(forKey: key), let value = try? JSONDecoder().decode([AthleteProfile].self, from: data) else { return [] }; return value }
     static func save(_ value: [AthleteProfile]) { UserDefaults.standard.set(try? JSONEncoder().encode(value), forKey: key) }
 }
-enum VideoProfileStore {
-    static let key = "ace.video.profiles"
-    static func load() -> [VideoProfile] { guard let data = UserDefaults.standard.data(forKey: key), let value = try? JSONDecoder().decode([VideoProfile].self, from: data) else { return [] }; return value }
-    static func save(_ value: [VideoProfile]) { UserDefaults.standard.set(try? JSONEncoder().encode(value), forKey: key) }
-}
-
 struct AthleteProfilesSheet: View {
     @Binding var profiles: [AthleteProfile]
     let onSelect: (AthleteProfile) -> Void
@@ -396,32 +379,6 @@ struct AthleteProfilesSheet: View {
                     Button("保存") { guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }; profiles.append(AthleteProfile(name: name, gender: gender, level: level)); AthleteProfileStore.save(profiles); name = ""; gender = ""; level = "" }
                 }
             }.navigationTitle("运动员资料").toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
-        }
-    }
-}
-
-struct VideoProfilesSheet: View {
-    @Binding var profiles: [VideoProfile]
-    let onSelect: (VideoProfile) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var notes = ""
-    @State private var scope = "full_report"
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("已保存视频信息") {
-                    ForEach(profiles) { profile in
-                        Button { onSelect(profile); dismiss() } label: { VStack(alignment: .leading) { Text(profile.title); Text(profile.scope == "cuts_only" ? "先生成 Cut" : "完整报告").font(.caption).foregroundStyle(.secondary) } }
-                    }.onDelete { profiles.remove(atOffsets: $0); VideoProfileStore.save(profiles) }
-                }
-                Section("新建视频信息") {
-                    TextField("复盘名称", text: $title)
-                    TextField("重点关注（可选）", text: $notes, axis: .vertical)
-                    Picker("分析范围", selection: $scope) { Text("完整报告").tag("full_report"); Text("先生成 Cut").tag("cuts_only") }
-                    Button("保存") { guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { return }; profiles.append(VideoProfile(title: title, notes: notes, scope: scope)); VideoProfileStore.save(profiles); title = ""; notes = ""; scope = "full_report" }
-                }
-            }.navigationTitle("视频信息模板").toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
         }
     }
 }
