@@ -295,6 +295,7 @@ private struct TaskProgressView: View {
     @State private var currentTask: TaskItem
     @State private var cuts: [ProgressiveCut] = []
     @State private var activeCut: ProgressiveCut?
+    @State private var analyzingCutID: String?
     @ObservedObject var store: TaskStore
     @EnvironmentObject private var uploads: UploadManager
 
@@ -372,15 +373,17 @@ private struct TaskProgressView: View {
     private var progressiveCutList: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("训练片段").font(.headline).foregroundStyle(ACETheme.ink)
-            Text("已完成的片段可立即查看；点选未完成片段会优先分析。")
+            Text("选择需要查看的片段后，系统会生成该回合的逐拍报告。")
                 .font(.caption).foregroundStyle(ACETheme.muted)
             ForEach(cuts) { cut in
                 Button {
-                    if cut.isReady { activeCut = cut }
-                    else if cut.state == "queued" || cut.state == "processing" {
+                    if cut.state == "queued" || cut.state == "processing" || cut.isReady {
                         Task {
-                            if let response = try? await APIClient.shared.prioritizeCut(taskID: currentTask.id, cutID: cut.id) {
-                                cuts = response.cuts
+                            analyzingCutID = cut.id
+                            if let focusedTask = try? await APIClient.shared.analyzeCut(taskID: currentTask.id, cutID: cut.id) {
+                                currentTask = focusedTask
+                            } else {
+                                analyzingCutID = nil
                             }
                         }
                     }
@@ -394,7 +397,7 @@ private struct TaskProgressView: View {
                                 .font(.caption).foregroundStyle(ACETheme.muted)
                         }
                         Spacer()
-                        Text(cut.stateLabel).font(.caption.bold()).foregroundStyle(cut.isReady ? ACETheme.green : ACETheme.muted)
+                        Text(analyzingCutID == cut.id ? "正在创建报告" : cut.stateLabel).font(.caption.bold()).foregroundStyle(cut.isReady ? ACETheme.green : ACETheme.muted)
                     }
                     .padding(13).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 8))
                 }
