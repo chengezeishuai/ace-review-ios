@@ -224,10 +224,10 @@ struct NewReviewView: View {
                 Section {
                     Picker("分析范围", selection: $analysisScope) {
                         Text("完整报告").tag("full_report")
-                        Text("仅生成 Cut").tag("cuts_only")
+                        Text("先生成 Cut").tag("cuts_only")
                     }
                     .pickerStyle(.segmented)
-                    Text(analysisScope == "cuts_only" ? "适合长视频：生成可回看的训练片段，不展开逐拍报告。" : "生成完整逐拍报告，并同时提供 Cut 回看。")
+                    Text(analysisScope == "cuts_only" ? "先快速生成可回看的训练片段，之后可按需选择片段生成逐拍报告。" : "生成完整逐拍报告，并同时提供 Cut 回看。")
                         .font(.caption).foregroundStyle(ACETheme.muted)
                 }
                 Section {
