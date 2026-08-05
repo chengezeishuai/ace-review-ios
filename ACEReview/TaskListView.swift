@@ -467,7 +467,7 @@ private struct ReviewReportView: View {
                                 generatingCutID = cut.id
                                 Task {
                                     do { _ = try await APIClient.shared.analyzeCut(taskID: task.id, cutID: cut.id) }
-                                    catch { loadError = error.localizedDescription }
+                                    catch let failure { loadError = failure.localizedDescription }
                                     generatingCutID = nil
                                 }
                             } label: {
@@ -600,7 +600,7 @@ private struct AuthenticatedVideoView: View {
                 try? FileManager.default.removeItem(at: destination)
                 try FileManager.default.moveItem(at: localURL, to: destination)
                 player = AVPlayer(url: destination)
-            } catch { error = error.localizedDescription }
+            } catch let failure { error = failure.localizedDescription }
         }
     }
 }
