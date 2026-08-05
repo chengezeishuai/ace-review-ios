@@ -18,6 +18,7 @@ struct NewReviewView: View {
     @State private var videoProfiles = VideoProfileStore.load()
     @State private var showAthleteProfiles = false
     @State private var showVideoProfiles = false
+    @FocusState private var focusedField: DetailField?
     let onSubmitted: () -> Void
 
     init(onSubmitted: @escaping () -> Void = {}) {
@@ -240,41 +241,31 @@ struct NewReviewView: View {
                     HStack {
                         Text("视频信息")
                         Spacer()
-                        Button("选择模板") { showVideoProfiles = true }
+                        Button("选择 / 管理") { focusedField = nil; showVideoProfiles = true }
                             .font(.caption.weight(.semibold))
                     }
-                    TextField("复盘名称", text: $title)
-                    HStack {
-                        TextField("运动员（选填）", text: $player)
-                        Button { showAthleteProfiles = true } label: {
-                            Image(systemName: "person.crop.circle.badge.plus")
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                    TextField("想重点查看什么（选填）", text: $notes, axis: .vertical)
-                    Button("保存当前视频信息") {
-                        videoProfiles.append(VideoProfile(title: title, notes: notes, scope: analysisScope))
-                        VideoProfileStore.save(videoProfiles)
-                    }
-                    .font(.caption.weight(.semibold))
+                    TextField("复盘名称", text: $title).focused($focusedField, equals: .title)
+                    TextField("想重点查看什么（选填）", text: $notes, axis: .vertical).focused($focusedField, equals: .notes)
                 }
                 Section("运动员信息（可选）") {
                     HStack {
-                        Text("性别")
+                        Text("运动员")
                         Spacer()
-                        Picker("性别", selection: $athleteGender) {
-                            Text("未选择").tag(""); Text("女").tag("女"); Text("男").tag("男"); Text("其他").tag("其他")
-                        }.labelsHidden()
+                        Menu {
+                            Button("未选择") { player = ""; athleteGender = ""; athleteLevel = "" }
+                            ForEach(athleteProfiles) { profile in
+                                Button(profile.name) { player = profile.name; athleteGender = profile.gender; athleteLevel = profile.level }
+                            }
+                            Divider()
+                            Button("新建 / 管理运动员") { focusedField = nil; showAthleteProfiles = true }
+                        } label: {
+                            Text(player.isEmpty ? "选择运动员" : player).foregroundStyle(ACETheme.green)
+                        }
                     }
-                    HStack {
-                        Text("基础")
-                        Spacer()
-                        Picker("基础", selection: $athleteLevel) {
-                            Text("未选择").tag(""); Text("初学").tag("初学"); Text("业余进阶").tag("业余进阶"); Text("比赛训练").tag("比赛训练")
-                        }.labelsHidden()
+                    if !athleteGender.isEmpty || !athleteLevel.isEmpty {
+                        Text([athleteGender, athleteLevel].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(ACETheme.muted)
                     }
-                    Button("新建 / 管理运动员资料") { showAthleteProfiles = true }
-                        .font(.caption.weight(.semibold))
                 }
                 Section {
                     Picker("分析范围", selection: $analysisScope) {
@@ -323,6 +314,9 @@ struct NewReviewView: View {
             .navigationTitle("提交复盘")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showDetails = false } } }
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("收起键盘") { focusedField = nil } } }
+            .simultaneousGesture(TapGesture().onEnded { focusedField = nil })
             .alert("提交未完成", isPresented: Binding(get: { !uploadError.isEmpty }, set: { if !$0 { uploadError = "" } })) {
                 Button("知道了", role: .cancel) {}
             } message: {
@@ -355,6 +349,7 @@ struct NewReviewView: View {
     }
 }
 
+private enum DetailField: Hashable { case title, notes }
 struct AthleteProfile: Codable, Identifiable { var id = UUID(); var name: String; var gender: String; var level: String }
 struct VideoProfile: Codable, Identifiable { var id = UUID(); var title: String; var notes: String; var scope: String }
 
@@ -409,6 +404,9 @@ struct VideoProfilesSheet: View {
     @Binding var profiles: [VideoProfile]
     let onSelect: (VideoProfile) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var notes = ""
+    @State private var scope = "full_report"
     var body: some View {
         NavigationStack {
             List {
@@ -416,6 +414,12 @@ struct VideoProfilesSheet: View {
                     ForEach(profiles) { profile in
                         Button { onSelect(profile); dismiss() } label: { VStack(alignment: .leading) { Text(profile.title); Text(profile.scope == "cuts_only" ? "先生成 Cut" : "完整报告").font(.caption).foregroundStyle(.secondary) } }
                     }.onDelete { profiles.remove(atOffsets: $0); VideoProfileStore.save(profiles) }
+                }
+                Section("新建视频信息") {
+                    TextField("复盘名称", text: $title)
+                    TextField("重点关注（可选）", text: $notes, axis: .vertical)
+                    Picker("分析范围", selection: $scope) { Text("完整报告").tag("full_report"); Text("先生成 Cut").tag("cuts_only") }
+                    Button("保存") { guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { return }; profiles.append(VideoProfile(title: title, notes: notes, scope: scope)); VideoProfileStore.save(profiles); title = ""; notes = ""; scope = "full_report" }
                 }
             }.navigationTitle("视频信息模板").toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
         }
