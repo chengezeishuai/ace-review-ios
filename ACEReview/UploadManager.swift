@@ -1039,6 +1039,7 @@ final class UploadManager: ObservableObject {
         title: String,
         player: String,
         notes: String,
+        analysisScope: String,
         onTaskCreated: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (String) -> Void = { _ in }
     ) {
@@ -1056,6 +1057,7 @@ final class UploadManager: ObservableObject {
             title: title,
             player: player,
             notes: notes,
+            analysisScope: analysisScope,
             onTaskCreated: onTaskCreated,
             onFailure: onFailure
         )

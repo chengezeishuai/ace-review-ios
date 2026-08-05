@@ -231,7 +231,7 @@ struct NewReviewView: View {
                         .font(.caption).foregroundStyle(ACETheme.muted)
                 }
                 Section {
-                    Button(isSubmitting ? "正在创建任务..." : "开始云端分析") {
+                    Button(action: {
                         guard let asset = selectedAsset else { return }
                         isSubmitting = true
                         uploadError = ""
@@ -256,6 +256,8 @@ struct NewReviewView: View {
                                 uploadError = message
                             }
                         )
+                    }) {
+                        Text(isSubmitting ? "正在创建任务..." : "开始云端分析")
                     }
                     .overlay { if isSubmitting { ProgressView().tint(ACETheme.green) } }
                     .frame(maxWidth: .infinity)
