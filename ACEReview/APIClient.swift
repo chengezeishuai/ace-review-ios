@@ -125,6 +125,10 @@ final class APIClient {
         try await request("api/app/tasks/\(taskID)/cuts/\(cutID)/prioritize", method: "POST")
     }
 
+    func analyzeCut(taskID: String, cutID: String) async throws -> TaskItem {
+        try await request("api/app/tasks/\(taskID)/cuts/\(cutID)/analyze", method: "POST")
+    }
+
     func comments(taskID: String) async throws -> CoachCommentEnvelope {
         try await request("api/app/tasks/\(taskID)/comments")
     }
