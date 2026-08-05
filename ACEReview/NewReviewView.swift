@@ -70,13 +70,6 @@ struct NewReviewView: View {
         .sheet(isPresented: $showDetails) {
             detailsSheet
         }
-        .sheet(isPresented: $showAthleteProfiles) {
-            AthleteProfilesSheet(profiles: $athleteProfiles) { profile in
-                player = profile.name
-                athleteGender = profile.gender
-                athleteLevel = profile.level
-            }
-        }
     }
 
     private var activeTaskID: String {
@@ -230,7 +223,10 @@ struct NewReviewView: View {
             Form {
                 Section("视频信息") {
                     TextField("复盘名称", text: $title).focused($focusedField, equals: .title)
-                    TextField("想重点查看什么（选填）", text: $notes, axis: .vertical).focused($focusedField, equals: .notes)
+                    TextField("想重点查看什么（选填）", text: $notes, axis: .vertical)
+                        .focused($focusedField, equals: .notes)
+                        .submitLabel(.done)
+                        .onSubmit { dismissKeyboard() }
                 }
                 Section("运动员信息（可选）") {
                     Text("选择运动员后，系统会结合其性别和基础水平给出更贴合的分析建议。")
@@ -248,7 +244,7 @@ struct NewReviewView: View {
                             Text(player.isEmpty ? "选择运动员" : player).foregroundStyle(ACETheme.green)
                         }
                     }
-                    Button { focusedField = nil; showAthleteProfiles = true } label: {
+                    Button { dismissKeyboard(); DispatchQueue.main.async { showAthleteProfiles = true } } label: {
                         Label("新建或管理运动员资料", systemImage: "person.crop.circle.badge.plus")
                     }
                     .font(.subheadline.weight(.semibold))
@@ -306,7 +302,13 @@ struct NewReviewView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showDetails = false } } }
             .scrollDismissesKeyboard(.interactively)
             .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("收起键盘") { focusedField = nil } } }
-            .simultaneousGesture(TapGesture().onEnded { focusedField = nil })
+            .sheet(isPresented: $showAthleteProfiles) {
+                AthleteProfilesSheet(profiles: $athleteProfiles) { profile in
+                    player = profile.name
+                    athleteGender = profile.gender
+                    athleteLevel = profile.level
+                }
+            }
             .alert("提交未完成", isPresented: Binding(get: { !uploadError.isEmpty }, set: { if !$0 { uploadError = "" } })) {
                 Button("知道了", role: .cancel) {}
             } message: {
@@ -330,6 +332,11 @@ struct NewReviewView: View {
 
     private func durationText(_ value: TimeInterval) -> String {
         String(format: "%d:%02d", Int(value) / 60, Int(value) % 60)
+    }
+
+    private func dismissKeyboard() {
+        focusedField = nil
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     private var composedNotes: String {
