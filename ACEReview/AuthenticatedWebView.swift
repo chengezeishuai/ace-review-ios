@@ -45,9 +45,9 @@ struct AuthenticatedWebView: UIViewRepresentable {
             const buttons = [...document.querySelectorAll('[data-cut-analyze]')];
             if (!buttons.length) return;
             const first = buttons[0].dataset.cutAnalyze || '';
-            const match = first.match(/\/api\/app\/tasks\/([a-f0-9]{32})\/cuts\/\d+\/analyze/);
-            if (!match) return;
-            const taskId = match[1];
+            const firstParts = first.split('/');
+            const taskId = firstParts[4];
+            if (!taskId) return;
             const style = document.createElement('style');
             style.textContent = '#ace-cut-status-panel{margin:12px 0;padding:14px;border:1px solid #d7e8ef;border-radius:14px;background:#f7fbfd;font:14px -apple-system,BlinkMacSystemFont,sans-serif;color:#173b4a}#ace-cut-status-panel button{border:0;background:#1687aa;color:white;border-radius:999px;padding:9px 14px;font-weight:600}#ace-cut-status-list{display:none;margin-top:10px;max-height:260px;overflow:auto}#ace-cut-status-list.open{display:block}.ace-cut-status-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e4eef2}.ace-cut-status-row:last-child{border-bottom:0}.ace-cut-status-state{color:#1687aa;font-weight:600}';
             document.head.appendChild(style);
@@ -64,7 +64,7 @@ struct AuthenticatedWebView: UIViewRepresentable {
                 const payload=await res.json(); const cuts=payload.data?.cuts || [];
                 list.innerHTML=cuts.map(c=>'<div class="ace-cut-status-row"><span>回合 '+String(c.id).padStart(3,'0')+'</span><span class="ace-cut-status-state">'+label(c.state)+(c.state==='processing'&&c.progress?' '+c.progress+'%':'')+'</span></div>').join('');
                 const states=new Map(cuts.map(c=>[String(c.id),c]));
-                buttons.forEach(b=>{const m=b.dataset.cutAnalyze.match(/\/cuts\/(\d+)\/analyze/); const c=m&&states.get(m[1]); if(!c)return; if(c.state==='processing'){b.textContent='逐拍分析中'+(c.progress?' '+c.progress+'%':'…');b.disabled=true;} else if(c.state==='ready'){b.textContent='已生成逐拍报告';b.disabled=false;}});
+                buttons.forEach(b=>{const parts=b.dataset.cutAnalyze.split('/'); const c=parts.length>6&&states.get(parts[6]); if(!c)return; if(c.state==='processing'){b.textContent='逐拍分析中'+(c.progress?' '+c.progress+'%':'…');b.disabled=true;} else if(c.state==='ready'){b.textContent='已生成逐拍报告';b.disabled=false;}});
               } catch (_) {}
             };
             sync(); setInterval(sync,3000);
