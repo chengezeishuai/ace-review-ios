@@ -38,6 +38,42 @@ struct AuthenticatedWebView: UIViewRepresentable {
         }, true);
         """
         configuration.userContentController.addUserScript(WKUserScript(source: cutBridge, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        let statusBridge = """
+        (() => {
+          const install = () => {
+            if (document.getElementById('ace-cut-status-panel')) return;
+            const buttons = [...document.querySelectorAll('[data-cut-analyze]')];
+            if (!buttons.length) return;
+            const first = buttons[0].dataset.cutAnalyze || '';
+            const match = first.match(/\/api\/app\/tasks\/([a-f0-9]{32})\/cuts\/\d+\/analyze/);
+            if (!match) return;
+            const taskId = match[1];
+            const style = document.createElement('style');
+            style.textContent = '#ace-cut-status-panel{margin:12px 0;padding:14px;border:1px solid #d7e8ef;border-radius:14px;background:#f7fbfd;font:14px -apple-system,BlinkMacSystemFont,sans-serif;color:#173b4a}#ace-cut-status-panel button{border:0;background:#1687aa;color:white;border-radius:999px;padding:9px 14px;font-weight:600}#ace-cut-status-list{display:none;margin-top:10px;max-height:260px;overflow:auto}#ace-cut-status-list.open{display:block}.ace-cut-status-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e4eef2}.ace-cut-status-row:last-child{border-bottom:0}.ace-cut-status-state{color:#1687aa;font-weight:600}';
+            document.head.appendChild(style);
+            const panel = document.createElement('section'); panel.id='ace-cut-status-panel';
+            panel.innerHTML='<button type="button" id="ace-cut-status-toggle">查看CUT分析状态</button><div id="ace-cut-status-list"></div>';
+            const target=document.querySelector('main') || document.body; target.insertBefore(panel,target.firstChild);
+            const list=panel.querySelector('#ace-cut-status-list');
+            panel.querySelector('#ace-cut-status-toggle').addEventListener('click',()=>list.classList.toggle('open'));
+            const label = state => state==='ready'?'已分析完成':state==='processing'?'分析中':state==='queued'?'排队中':'待分析';
+            const sync = async () => {
+              try {
+                const res=await fetch('/api/app/tasks/'+taskId+'/cuts?_ts='+Date.now(),{credentials:'same-origin',cache:'no-store'});
+                if(!res.ok) return;
+                const payload=await res.json(); const cuts=payload.data?.cuts || [];
+                list.innerHTML=cuts.map(c=>'<div class="ace-cut-status-row"><span>回合 '+String(c.id).padStart(3,'0')+'</span><span class="ace-cut-status-state">'+label(c.state)+(c.state==='processing'&&c.progress?' '+c.progress+'%':'')+'</span></div>').join('');
+                const states=new Map(cuts.map(c=>[String(c.id),c]));
+                buttons.forEach(b=>{const m=b.dataset.cutAnalyze.match(/\/cuts\/(\d+)\/analyze/); const c=m&&states.get(m[1]); if(!c)return; if(c.state==='processing'){b.textContent='逐拍分析中'+(c.progress?' '+c.progress+'%':'…');b.disabled=true;} else if(c.state==='ready'){b.textContent='已生成逐拍报告';b.disabled=false;}});
+              } catch (_) {}
+            };
+            sync(); setInterval(sync,3000);
+          };
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded',install,{once:true}); else install();
+        })();
+        """
+        configuration.userContentController.addUserScript(WKUserScript(source: statusBridge, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
         context.coordinator.webView = webView
         webView.allowsBackForwardNavigationGestures = true
