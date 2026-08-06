@@ -378,6 +378,9 @@ private struct TaskProgressView: View {
                 ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green).padding(.horizontal, 42)
                 Text("\(Int(displayedProgress.rounded()))% · 状态会自动刷新").font(.caption).foregroundStyle(ACETheme.muted)
             }
+            if !cuts.isEmpty {
+                progressiveCutList
+            }
             if currentTask.status == "failed" {
                 Button(store.retryingTaskIDs.contains(currentTask.id) ? "正在重新分析..." : "重新分析") {
                     Task {
@@ -389,9 +392,6 @@ private struct TaskProgressView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(store.retryingTaskIDs.contains(currentTask.id))
             }
-            // Progressive cuts are an internal processing artifact. Displaying
-            // them before completion makes every row look clickable while the
-            // report and source media are still being assembled.
         }
         .padding(28)
         }
