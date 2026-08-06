@@ -13,12 +13,12 @@ struct AuthenticatedWebView: UIViewRepresentable {
             let escaped = token.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
             let script = """
             (() => {
-              const token = 'Bearer (escaped)';
+              const token = 'Bearer \(escaped)';
               const originalFetch = window.fetch;
               window.fetch = (input, init = {}) => {
                 const headers = new Headers(init.headers || {});
                 headers.set('Authorization', token);
-                headers.set('clientid', '(AppSettings.shared.clientID)');
+                headers.set('clientid', '\(AppSettings.shared.clientID)');
                 return originalFetch(input, {...init, headers, credentials: 'include'});
               };
             })();
