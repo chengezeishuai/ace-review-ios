@@ -109,12 +109,53 @@ struct AuthenticatedWebView: UIViewRepresentable {
             let cutID = String(path[cutRange])
             Task {
                 do {
-                    _ = try await APIClient.shared.analyzeCut(taskID: taskID, cutID: cutID)
-                    await MainActor.run { self.setButtons(path: path, text: "已提交，生成中", disabled: true) }
+                    let submitted = try await APIClient.shared.analyzeCut(taskID: taskID, cutID: cutID)
+                    await MainActor.run { self.setButtons(path: path, text: "已提交，处理中 20%", disabled: true) }
+                    await self.waitForCompletion(taskID: submitted.id, buttonPath: path)
                 } catch {
                     await MainActor.run { self.setButtons(path: path, text: "生成本段逐拍报告", disabled: false, alert: "逐拍分析提交失败：\(error.localizedDescription)") }
                 }
             }
+        }
+
+        private func waitForCompletion(taskID: String, buttonPath: String) async {
+            for _ in 0..<900 {
+                try? await Task.sleep(for: .seconds(2))
+                do {
+                    let task = try await APIClient.shared.task(id: taskID)
+                    if task.status == "completed", let reportPath = task.reportURL {
+                        await MainActor.run {
+                            self.setButtons(path: buttonPath, text: "已生成，打开报告", disabled: false)
+                            self.loadAuthenticated(reportPath)
+                        }
+                        return
+                    }
+                    if task.status == "failed" || task.status == "cancelled" {
+                        await MainActor.run {
+                            self.setButtons(path: buttonPath, text: "重新生成本段报告", disabled: false, alert: task.failureReason)
+                        }
+                        return
+                    }
+                    await MainActor.run {
+                        self.setButtons(path: buttonPath, text: "处理中 \(max(20, min(99, task.progress)))%", disabled: true)
+                    }
+                } catch {
+                    // A transient polling failure should not turn a valid submitted task into a false failure.
+                }
+            }
+            await MainActor.run {
+                self.setButtons(path: buttonPath, text: "后台处理中，刷新查看", disabled: false)
+            }
+        }
+
+        private func loadAuthenticated(_ path: String) {
+            let target = APIClient.shared.url(for: path)
+            var request = URLRequest(url: target)
+            request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
+            if let token = KeychainStore.get("accessToken") {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            webView?.load(request)
         }
 
         private func setButtons(path: String, text: String, disabled: Bool, alert: String? = nil) {

@@ -17,8 +17,10 @@ struct TaskListView: View {
                     header
                     searchField
                     taskFilters
-                    if let snapshot = uploads.snapshots.values.first, snapshot.phase != .idle {
-                        liveUploadCard(snapshot)
+                    if !uploads.snapshots.isEmpty {
+                        ForEach(Array(activeUploadSnapshots.enumerated()), id: \.offset) { _, snapshot in
+                            liveUploadCard(snapshot)
+                        }
                     }
                     if !taskStore.errorMessage.isEmpty {
                         Label(taskStore.errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -157,6 +159,12 @@ struct TaskListView: View {
                     .font(.caption.bold())
                     .foregroundStyle(ACETheme.green)
             }
+            if !snapshot.filename.isEmpty {
+                Text(snapshot.filename)
+                    .font(.caption2)
+                    .foregroundStyle(ACETheme.muted)
+                    .lineLimit(1)
+            }
             ProgressView(value: uploadProgress(snapshot), total: 100).tint(ACETheme.green)
             Text(snapshot.message).font(.caption).foregroundStyle(ACETheme.muted)
             HStack(spacing: 7) {
@@ -193,6 +201,23 @@ struct TaskListView: View {
         Label(title, systemImage: complete ? "checkmark.circle.fill" : "circle")
             .font(.caption2)
             .foregroundStyle(complete ? ACETheme.green : ACETheme.muted)
+    }
+
+    private var activeUploadSnapshots: [UploadSnapshot] {
+        uploads.snapshots.values.sorted { left, right in
+            uploadPhaseRank(left.phase) < uploadPhaseRank(right.phase)
+        }
+    }
+
+    private func uploadPhaseRank(_ phase: UploadPhase) -> Int {
+        switch phase {
+        case .uploading: return 0
+        case .finalizing: return 1
+        case .reading: return 2
+        case .failed: return 3
+        case .completed: return 4
+        case .idle: return 5
+        }
     }
 }
 
@@ -568,6 +593,7 @@ private struct AuthenticatedVideoView: View {
             } catch let failure { error = failure.localizedDescription }
         }
     }
+
 }
 
 private struct TennisCourtThumbnail: View {
