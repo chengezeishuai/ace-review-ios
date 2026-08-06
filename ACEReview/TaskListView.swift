@@ -441,8 +441,6 @@ private struct ReviewReportView: View {
     @State private var showVideo = false
     @State private var showPDF = false
     @State private var loadError = ""
-    @State private var reportCuts: [ProgressiveCut] = []
-    @State private var generatingCutID: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -456,38 +454,6 @@ private struct ReviewReportView: View {
                     }
                 }
                 Text(summary?.summary ?? "报告正在载入。").font(.subheadline).foregroundStyle(ACETheme.muted).padding(16).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 14))
-                if !reportCuts.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("逐拍分析").font(.headline).foregroundStyle(ACETheme.ink)
-                        Text("选择一个回合后生成逐拍报告，生成完成后会自动出现在完整报告中。")
-                            .font(.caption).foregroundStyle(ACETheme.muted)
-                        ForEach(reportCuts) { cut in
-                            Button {
-                                guard generatingCutID == nil else { return }
-                                generatingCutID = cut.id
-                                Task {
-                                    do { _ = try await APIClient.shared.analyzeCut(taskID: task.id, cutID: cut.id) }
-                                    catch let failure { loadError = failure.localizedDescription }
-                                    generatingCutID = nil
-                                }
-                            } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(cut.label).font(.subheadline.bold())
-                                        Text("\(TaskDateFormatter.cutTime(cut.start)) - \(TaskDateFormatter.cutTime(cut.end))")
-                                            .font(.caption).foregroundStyle(ACETheme.muted)
-                                    }
-                                    Spacer()
-                                    Text(generatingCutID == cut.id ? "生成中…" : "生成逐拍")
-                                        .font(.caption.bold()).foregroundStyle(ACETheme.green)
-                                }
-                                .padding(13).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 10))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(generatingCutID != nil)
-                        }
-                    }
-                }
                 if !loadError.isEmpty {
                     Label(loadError, systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote).foregroundStyle(.red)
@@ -523,7 +489,6 @@ private struct ReviewReportView: View {
         .task {
             do {
                 summary = try await APIClient.shared.reportSummary(taskID: task.id)
-                reportCuts = (try? await APIClient.shared.progressiveCuts(taskID: task.id).cuts) ?? []
             }
             catch { loadError = error.localizedDescription }
         }
