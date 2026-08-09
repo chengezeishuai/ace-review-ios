@@ -16,6 +16,7 @@ struct NewReviewView: View {
     @State private var athleteLevel = ""
     @State private var athleteProfiles = AthleteProfileStore.load()
     @State private var showAthleteProfiles = false
+    @State private var displayedTaskID = ""
     @FocusState private var focusedField: DetailField?
     let onSubmitted: () -> Void
 
@@ -85,7 +86,10 @@ struct NewReviewView: View {
     }
 
     private var activeTaskID: String {
-        uploads.snapshots.keys.first ?? ""
+        if uploads.snapshot(for: displayedTaskID) != nil {
+            return displayedTaskID
+        }
+        return uploads.orderedSnapshots.first?.id ?? ""
     }
 
     private var brandHeader: some View {
@@ -287,7 +291,8 @@ struct NewReviewView: View {
                             analysisScope: analysisScope,
                             athleteGender: athleteGender,
                             athleteLevel: athleteLevel,
-                            onTaskCreated: { _ in
+                            onTaskCreated: { taskID in
+                                displayedTaskID = taskID
                                 isSubmitting = false
                                 showDetails = false
                                 selectedAsset = nil

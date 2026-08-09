@@ -17,9 +17,9 @@ struct TaskListView: View {
                     header
                     searchField
                     taskFilters
-                    if !uploads.snapshots.isEmpty {
-                        ForEach(Array(activeUploadSnapshots.enumerated()), id: \.offset) { _, snapshot in
-                            liveUploadCard(snapshot)
+                    if !uploads.orderedSnapshots.isEmpty {
+                        ForEach(uploads.orderedSnapshots) { item in
+                            liveUploadCard(item.snapshot)
                         }
                     }
                     if !taskStore.errorMessage.isEmpty {
@@ -203,22 +203,6 @@ struct TaskListView: View {
             .foregroundStyle(complete ? ACETheme.green : ACETheme.muted)
     }
 
-    private var activeUploadSnapshots: [UploadSnapshot] {
-        uploads.snapshots.values.sorted { left, right in
-            uploadPhaseRank(left.phase) < uploadPhaseRank(right.phase)
-        }
-    }
-
-    private func uploadPhaseRank(_ phase: UploadPhase) -> Int {
-        switch phase {
-        case .uploading: return 0
-        case .finalizing: return 1
-        case .reading: return 2
-        case .failed: return 3
-        case .completed: return 4
-        case .idle: return 5
-        }
-    }
 }
 
 private enum TaskFilter: String, CaseIterable, Identifiable {

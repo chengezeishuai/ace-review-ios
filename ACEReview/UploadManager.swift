@@ -1003,6 +1003,7 @@ final class UploadManager: ObservableObject {
     static let maximumConcurrentUploads = 6
 
     @Published private(set) var snapshots: [String: UploadSnapshot] = [:]
+    @Published private(set) var orderedSnapshots: [IdentifiedUploadSnapshot] = []
     @Published private(set) var activeUploadCount = 0
     @Published private(set) var completionCounter = 0
     @Published private(set) var lastError = ""
@@ -1119,6 +1120,9 @@ final class UploadManager: ObservableObject {
         }
         previousActiveTaskIDs = activeIDs
         snapshots = newSnapshots
+        orderedSnapshots = pairs.map {
+            IdentifiedUploadSnapshot(id: $0.0, snapshot: $0.1)
+        }
         activeUploadCount = activeSlots.count
         lastError = activeSlots.compactMap {
             $0.lastError.isEmpty ? nil : $0.lastError

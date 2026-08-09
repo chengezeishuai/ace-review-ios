@@ -345,6 +345,11 @@ struct UploadSnapshot {
     var message = ""
 }
 
+struct IdentifiedUploadSnapshot: Identifiable {
+    let id: String
+    let snapshot: UploadSnapshot
+}
+
 enum TaskLoadState: Equatable {
     case idle
     case loading
