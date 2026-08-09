@@ -319,10 +319,6 @@ private enum TaskDateFormatter {
 
 private struct TaskProgressView: View {
     @State private var currentTask: TaskItem
-    @State private var cuts: [ProgressiveCut] = []
-    @State private var activeCut: ProgressiveCut?
-    @State private var analyzingCutID: String?
-    @State private var cutError = ""
     @ObservedObject var store: TaskStore
     @EnvironmentObject private var uploads: UploadManager
 
@@ -343,9 +339,6 @@ private struct TaskProgressView: View {
             while !Task.isCancelled && currentTask.isActive {
                 if let refreshed = await store.detail(id: currentTask.id) {
                     currentTask = refreshed
-                    if let response = try? await APIClient.shared.progressiveCuts(taskID: currentTask.id) {
-                        cuts = response.cuts
-                    }
                     if refreshed.isComplete {
                         await store.load()
                         break
@@ -354,13 +347,6 @@ private struct TaskProgressView: View {
                 if currentTask.isActive {
                     try? await Task.sleep(for: .seconds(3))
                 }
-            }
-        }
-        .sheet(item: $activeCut) { cut in
-            NavigationStack {
-                AuthenticatedWebView(path: cut.viewerURL)
-                    .navigationTitle(cut.label)
-                    .navigationBarTitleDisplayMode(.inline)
             }
         }
     }
@@ -377,9 +363,6 @@ private struct TaskProgressView: View {
             if currentTask.status != "failed" {
                 ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green).padding(.horizontal, 42)
                 Text("\(Int(displayedProgress.rounded()))% · 状态会自动刷新").font(.caption).foregroundStyle(ACETheme.muted)
-            }
-            if !cuts.isEmpty {
-                progressiveCutList
             }
             if currentTask.status == "failed" {
                 Button(store.retryingTaskIDs.contains(currentTask.id) ? "正在重新分析..." : "重新分析") {
@@ -399,46 +382,6 @@ private struct TaskProgressView: View {
         .navigationTitle("分析状态").navigationBarTitleDisplayMode(.inline)
     }
 
-    private var progressiveCutList: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("训练片段").font(.headline).foregroundStyle(ACETheme.ink)
-            Text("选择需要查看的片段后，系统会生成该回合的逐拍报告。")
-                .font(.caption).foregroundStyle(ACETheme.muted)
-            ForEach(cuts) { cut in
-                Button {
-                    guard analyzingCutID == nil else { return }
-                    Task {
-                        analyzingCutID = cut.id
-                        do {
-                            currentTask = try await APIClient.shared.analyzeCut(taskID: currentTask.id, cutID: cut.id)
-                        } catch {
-                            cutError = error.localizedDescription
-                            analyzingCutID = nil
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: cut.isReady ? "play.circle.fill" : "clock.arrow.circlepath")
-                            .font(.title3).foregroundStyle(cut.isReady ? ACETheme.green : ACETheme.muted)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(cut.label).font(.subheadline.bold()).foregroundStyle(ACETheme.ink)
-                            Text("\(TaskDateFormatter.cutTime(cut.start)) - \(TaskDateFormatter.cutTime(cut.end))")
-                                .font(.caption).foregroundStyle(ACETheme.muted)
-                        }
-                        Spacer()
-                        Text(analyzingCutID == cut.id ? "正在创建报告" : cut.stateLabel).font(.caption.bold()).foregroundStyle(cut.isReady ? ACETheme.green : ACETheme.muted)
-                    }
-                    .padding(13).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-                .disabled(cut.state == "empty")
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .alert("逐拍分析未提交", isPresented: Binding(get: { !cutError.isEmpty }, set: { if !$0 { cutError = "" } })) {
-            Button("知道了", role: .cancel) { cutError = "" }
-        } message: { Text(cutError) }
-    }
 
     private var localUpload: UploadSnapshot? { uploads.snapshot(for: currentTask.id) }
     private var displayedProgress: Double {

@@ -149,9 +149,11 @@ private final class UploadSlot: NSObject, ObservableObject {
 
     init(slotIndex: Int) {
         self.slotIndex = slotIndex
-        self.backgroundIdentifier = slotIndex == 0
-            ? "com.ace.review.background-upload"
-            : "com.ace.review.background-upload.secondary"
+        self.backgroundIdentifier = switch slotIndex {
+        case 0: "com.ace.review.background-upload"
+        case 1: "com.ace.review.background-upload.secondary"
+        default: "com.ace.review.background-upload.\(slotIndex)"
+        }
         super.init()
         manifest = loadManifest()
         if let manifest {
@@ -207,6 +209,8 @@ private final class UploadSlot: NSObject, ObservableObject {
         player: String,
         notes: String,
         analysisScope: String,
+        athleteGender: String,
+        athleteLevel: String,
         onTaskCreated: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (String) -> Void = { _ in }
     ) {
@@ -252,7 +256,9 @@ private final class UploadSlot: NSObject, ObservableObject {
                     capturedAt: asset.creationDate.map { ISO8601DateFormatter().string(from: $0) },
                     captureLocation: captureLocation,
                     reportTheme: ThemeStore.shared.palette,
-                    analysisScope: analysisScope
+                    analysisScope: analysisScope,
+                    athleteGender: athleteGender,
+                    athleteLevel: athleteLevel
                 )
                 let folder = try self.uploadDirectory(taskID: response.task.id)
                 let newManifest = UploadManifest(
@@ -772,9 +778,11 @@ private final class UploadSlot: NSObject, ObservableObject {
             for: .applicationSupportDirectory,
             in: .userDomainMask
         )[0]
-        let filename = slotIndex == 0
-            ? "ace-upload-manifest.json"
-            : "ace-upload-manifest-secondary.json"
+        let filename = switch slotIndex {
+        case 0: "ace-upload-manifest.json"
+        case 1: "ace-upload-manifest-secondary.json"
+        default: "ace-upload-manifest-\(slotIndex).json"
+        }
         return support.appendingPathComponent(filename)
     }
 
@@ -992,7 +1000,7 @@ private struct UploadResponse: Decodable {
 
 final class UploadManager: ObservableObject {
     static let shared = UploadManager()
-    static let maximumConcurrentUploads = 2
+    static let maximumConcurrentUploads = 6
 
     @Published private(set) var snapshots: [String: UploadSnapshot] = [:]
     @Published private(set) var activeUploadCount = 0
@@ -1040,13 +1048,15 @@ final class UploadManager: ObservableObject {
         player: String,
         notes: String,
         analysisScope: String,
+        athleteGender: String,
+        athleteLevel: String,
         onTaskCreated: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (String) -> Void = { _ in }
     ) {
         guard let index = slots.indices.first(where: {
             !slots[$0].hasActiveUpload && !reservedSlotIndexes.contains($0)
         }) else {
-            let message = "最多可同时提交两个视频，请等待其中一个完成"
+            let message = "最多可排队提交六个视频，请等待其中一个上传完成"
             lastError = message
             onFailure(message)
             return
@@ -1058,6 +1068,8 @@ final class UploadManager: ObservableObject {
             player: player,
             notes: notes,
             analysisScope: analysisScope,
+            athleteGender: athleteGender,
+            athleteLevel: athleteLevel,
             onTaskCreated: onTaskCreated,
             onFailure: onFailure
         )

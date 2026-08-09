@@ -199,7 +199,9 @@ final class APIClient {
         capturedAt: String?,
         captureLocation: String?,
         reportTheme: ACEPalette,
-        analysisScope: String
+        analysisScope: String,
+        athleteGender: String,
+        athleteLevel: String
     ) async throws -> StreamingUploadResponse {
         try await request(
             "api/app/uploads",
@@ -213,6 +215,8 @@ final class APIClient {
                 "capturedAt": capturedAt ?? "",
                 "captureLocation": captureLocation ?? "",
                 "analysisScope": analysisScope,
+                "athleteGender": athleteGender,
+                "athleteLevel": athleteLevel,
                 "reportTheme": [
                     "primary": reportTheme.primary,
                     "accent": reportTheme.accent,

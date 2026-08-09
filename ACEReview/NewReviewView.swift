@@ -64,7 +64,12 @@ struct NewReviewView: View {
             PhotoAssetPicker { asset in
                 selectedAsset = asset
                 title = defaultTitle(for: asset)
-                showDetails = true
+                showPicker = false
+                // Do not present the form while PHPicker is still dismissing;
+                // otherwise iOS can place the new sheet behind the picker.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showDetails = true
+                }
             }
         }
         .sheet(isPresented: $showDetails) {
@@ -266,7 +271,7 @@ struct NewReviewView: View {
                         Text("先生成 Cut").tag("cuts_only")
                     }
                     .pickerStyle(.segmented)
-                    Text(analysisScope == "cuts_only" ? "适合长视频：先快速生成可回看的训练片段，之后可按需选择片段生成逐拍报告。" : "生成完整逐拍报告，并同时提供 Cut 回看。")
+                    Text(analysisScope == "cuts_only" ? "仅整理可回看的训练回合，之后再按需生成逐拍报告。" : "直接生成完整逐拍报告；分析完成前只显示总进度，不提前展示分片。")
                         .font(.caption).foregroundStyle(ACETheme.muted)
                 }
                 Section {
@@ -280,12 +285,16 @@ struct NewReviewView: View {
                             player: player,
                             notes: composedNotes,
                             analysisScope: analysisScope,
+                            athleteGender: athleteGender,
+                            athleteLevel: athleteLevel,
                             onTaskCreated: { _ in
                                 isSubmitting = false
                                 showDetails = false
                                 selectedAsset = nil
                                 title = ""
                                 player = ""
+                                athleteGender = ""
+                                athleteLevel = ""
                                 notes = ""
                                 analysisScope = "full_report"
                                 onSubmitted()
