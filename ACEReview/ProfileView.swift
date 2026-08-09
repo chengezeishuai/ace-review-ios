@@ -43,8 +43,20 @@ struct ProfileView: View {
     }
 
     private var brandHeader: some View {
-        HStack { Spacer(); HStack(spacing: 8) { ACEBrandMark(size: 29); Text("ACE Review").font(.system(size: 17, weight: .semibold, design: .serif)).foregroundStyle(ACETheme.green) }; Spacer(); NavigationLink { SupportView() } label: { Image(systemName: "gearshape").foregroundStyle(ACETheme.ink) } }
-            .frame(height: 38)
+        ACEPageHeader(
+            eyebrow: "ACCOUNT",
+            title: "我的",
+            subtitle: "管理账号、组织和报告偏好。"
+        ) {
+            NavigationLink { SupportView() } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(ACETheme.ink)
+                    .frame(width: 42, height: 42)
+                    .background(ACETheme.paper, in: Circle())
+                    .overlay { Circle().stroke(ACETheme.line, lineWidth: 1) }
+            }
+        }
     }
 
     private var accountCard: some View {
@@ -72,7 +84,7 @@ struct ProfileView: View {
             Divider().padding(.leading, 42)
             NavigationLink { PerformanceCenterView() } label: { settingRow("训练表现", "chart.line.uptrend.xyaxis") }
             Divider().padding(.leading, 42)
-            NavigationLink { ThemePaletteView() } label: { settingRow("主题配色", "paintpalette") }
+            NavigationLink { ThemePaletteView() } label: { settingRow("报告配色", "paintpalette") }
             Divider().padding(.leading, 42)
             NavigationLink { SupportView() } label: { settingRow("帮助与支持", "questionmark.circle") }
         }

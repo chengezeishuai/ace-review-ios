@@ -14,6 +14,8 @@ struct NewReviewView: View {
     @State private var uploadError = ""
     @State private var athleteGender = ""
     @State private var athleteLevel = ""
+    @State private var athleteHandedness = ""
+    @State private var athleteGoal = ""
     @State private var athleteProfiles = AthleteProfileStore.load()
     @State private var showAthleteProfiles = false
     @State private var displayedTaskID = ""
@@ -29,13 +31,13 @@ struct NewReviewView: View {
             ACETheme.cream.ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
-                    brandHeader
-                    Text("新建复盘")
-                        .font(.system(size: 33, weight: .bold, design: .rounded))
-                        .foregroundStyle(ACETheme.ink)
-                    Text("上传一段训练视频，获得清晰、可信的技术复盘。")
-                        .font(.subheadline)
-                        .foregroundStyle(ACETheme.muted)
+                    ACEPageHeader(
+                        eyebrow: "ACE REVIEW",
+                        title: "开始复盘",
+                        subtitle: "上传训练视频，离开页面也会在后台继续。"
+                    ) {
+                        ACEBrandMark(size: 42)
+                    }
 
                     intelligenceCard
                     chooseVideoButton
@@ -76,13 +78,6 @@ struct NewReviewView: View {
         .sheet(isPresented: $showDetails) {
             detailsSheet
         }
-        .sheet(isPresented: $showAthleteProfiles) {
-            AthleteProfilesSheet(profiles: $athleteProfiles) { profile in
-                player = profile.name
-                athleteGender = profile.gender
-                athleteLevel = profile.level
-            }
-        }
     }
 
     private var activeTaskID: String {
@@ -92,53 +87,40 @@ struct NewReviewView: View {
         return uploads.orderedSnapshots.first?.id ?? ""
     }
 
-    private var brandHeader: some View {
-        HStack {
-            Spacer()
-            HStack(spacing: 8) {
-                ACEBrandMark(size: 29)
-                Text("ACE Review")
-                    .font(.system(size: 17, weight: .semibold, design: .serif))
-                    .foregroundStyle(ACETheme.green)
+    private var intelligenceCard: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("把训练变成下一次进步")
+                        .font(.title3.bold())
+                    Text("识别动作 · 校验证据 · 生成训练建议")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.78))
+                }
+                Spacer()
+                Image(systemName: "figure.tennis")
+                    .font(.system(size: 32, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
             }
-            Spacer()
-            Image(systemName: "bell")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(ACETheme.ink)
+            HStack(spacing: 8) {
+                heroTag("完整原片", icon: "film")
+                heroTag("后台上传", icon: "arrow.up.circle")
+                heroTag("证据优先", icon: "checkmark.seal")
+            }
         }
-        .frame(height: 38)
+        .foregroundStyle(.white)
+        .padding(20)
+        .background(ACETheme.heroGradient)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: ACETheme.green.opacity(0.18), radius: 18, y: 9)
     }
 
-    private var intelligenceCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                Image(systemName: "cloud.fill")
-                    .font(.system(size: 24))
-                    .foregroundStyle(ACETheme.green)
-                    .frame(width: 48, height: 48)
-                    .background(ACETheme.green.opacity(0.09))
-                    .clipShape(Circle())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("云端智能分析")
-                        .font(.headline)
-                        .foregroundStyle(ACETheme.ink)
-                    Text("逐拍识别、证据校验、训练建议")
-                        .font(.caption)
-                        .foregroundStyle(ACETheme.muted)
-                }
-            }
-            Divider()
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.seal.fill").foregroundStyle(ACETheme.green)
-                Text("仅基于清晰可见的动作给出结论")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(ACETheme.green)
-            }
-        }
-        .padding(17)
-        .background(ACETheme.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(ACETheme.line, lineWidth: 1) }
+    private func heroTag(_ title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background(.white.opacity(0.13), in: Capsule())
     }
 
     private var chooseVideoButton: some View {
@@ -152,11 +134,16 @@ struct NewReviewView: View {
                 Image(systemName: "chevron.right")
                     .font(.caption.bold())
             }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 20)
-            .frame(height: 54)
-            .background(ACETheme.green)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .foregroundStyle(ACETheme.ink)
+            .padding(.horizontal, 18)
+            .frame(height: 58)
+            .background(ACETheme.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(ACETheme.line, lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(0.035), radius: 10, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -251,9 +238,9 @@ struct NewReviewView: View {
                         Text("选择运动员").font(.subheadline)
                         Spacer()
                         Menu {
-                            Button("未选择") { player = ""; athleteGender = ""; athleteLevel = "" }
+                            Button("未选择") { player = ""; athleteGender = ""; athleteLevel = ""; athleteHandedness = ""; athleteGoal = "" }
                             ForEach(athleteProfiles) { profile in
-                                Button(profile.name) { player = profile.name; athleteGender = profile.gender; athleteLevel = profile.level }
+                                Button(profile.name) { player = profile.name; athleteGender = profile.gender; athleteLevel = profile.level; athleteHandedness = profile.dominantHand ?? ""; athleteGoal = profile.trainingGoal ?? "" }
                             }
                             Divider()
                         } label: {
@@ -264,8 +251,8 @@ struct NewReviewView: View {
                         Label("新建或管理运动员资料", systemImage: "person.crop.circle.badge.plus")
                     }
                     .font(.subheadline.weight(.semibold))
-                    if !athleteGender.isEmpty || !athleteLevel.isEmpty {
-                        Text([athleteGender, athleteLevel].filter { !$0.isEmpty }.joined(separator: " · "))
+                    if !athleteGender.isEmpty || !athleteLevel.isEmpty || !athleteHandedness.isEmpty || !athleteGoal.isEmpty {
+                        Text([athleteGender, athleteLevel, athleteHandedness, athleteGoal].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.caption).foregroundStyle(ACETheme.muted)
                     }
                 }
@@ -291,6 +278,8 @@ struct NewReviewView: View {
                             analysisScope: analysisScope,
                             athleteGender: athleteGender,
                             athleteLevel: athleteLevel,
+                            athleteHandedness: athleteHandedness,
+                            athleteGoal: athleteGoal,
                             onTaskCreated: { taskID in
                                 displayedTaskID = taskID
                                 isSubmitting = false
@@ -300,6 +289,8 @@ struct NewReviewView: View {
                                 player = ""
                                 athleteGender = ""
                                 athleteLevel = ""
+                                athleteHandedness = ""
+                                athleteGoal = ""
                                 notes = ""
                                 analysisScope = "full_report"
                                 onSubmitted()
@@ -328,6 +319,16 @@ struct NewReviewView: View {
             } message: {
                 Text(uploadError)
             }
+            .sheet(isPresented: $showAthleteProfiles) {
+                AthleteProfilesSheet(profiles: $athleteProfiles) { profile in
+                    player = profile.name
+                    athleteGender = profile.gender
+                    athleteLevel = profile.level
+                    athleteHandedness = profile.dominantHand ?? ""
+                    athleteGoal = profile.trainingGoal ?? ""
+                }
+            }
+            .tint(ACETheme.green)
         }
     }
 
@@ -340,7 +341,9 @@ struct NewReviewView: View {
     }
 
     private func defaultTitle(for asset: PHAsset) -> String {
-        let formatter = DateFormatter(); formatter.dateFormat = "MMM d 训练"
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M月d日训练"
         return formatter.string(from: asset.creationDate ?? Date())
     }
 
@@ -354,14 +357,19 @@ struct NewReviewView: View {
     }
 
     private var composedNotes: String {
-        let profile = [athleteGender.isEmpty ? nil : "性别：\(athleteGender)", athleteLevel.isEmpty ? nil : "基础：\(athleteLevel)"]
-            .compactMap { $0 }.joined(separator: "，")
-        return profile.isEmpty ? notes : (notes.isEmpty ? "运动员信息：\(profile)" : "运动员信息：\(profile)\n\(notes)")
+        notes.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
 private enum DetailField: Hashable { case title, notes }
-struct AthleteProfile: Codable, Identifiable { var id = UUID(); var name: String; var gender: String; var level: String }
+struct AthleteProfile: Codable, Identifiable {
+    var id = UUID()
+    var name: String
+    var gender: String
+    var level: String
+    var dominantHand: String?
+    var trainingGoal: String?
+}
 
 enum AthleteProfileStore {
     static let key = "ace.athlete.profiles"
@@ -375,12 +383,14 @@ struct AthleteProfilesSheet: View {
     @State private var name = ""
     @State private var gender = ""
     @State private var level = ""
+    @State private var dominantHand = ""
+    @State private var trainingGoal = ""
     var body: some View {
         NavigationStack {
             List {
                 Section("已保存资料") {
                     ForEach(profiles) { profile in
-                        Button { onSelect(profile); dismiss() } label: { VStack(alignment: .leading) { Text(profile.name); Text([profile.gender, profile.level].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) } }
+                        Button { onSelect(profile); dismiss() } label: { VStack(alignment: .leading) { Text(profile.name); Text([profile.gender, profile.level, profile.dominantHand ?? "", profile.trainingGoal ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) } }
                     }.onDelete { profiles.remove(atOffsets: $0); AthleteProfileStore.save(profiles) }
                 }
                 Section("新建运动员") {
@@ -397,7 +407,13 @@ struct AthleteProfilesSheet: View {
                         Text("业余进阶").tag("业余进阶")
                         Text("比赛训练").tag("比赛训练")
                     }
-                    Button("保存") { guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }; profiles.append(AthleteProfile(name: name, gender: gender, level: level)); AthleteProfileStore.save(profiles); name = ""; gender = ""; level = "" }
+                    Picker("惯用手", selection: $dominantHand) {
+                        Text("未选择").tag("")
+                        Text("右手").tag("右手")
+                        Text("左手").tag("左手")
+                    }
+                    TextField("训练目标（例如：提升反手稳定性）", text: $trainingGoal)
+                    Button("保存") { guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }; let cleanedGoal = String(trainingGoal.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80)); profiles.append(AthleteProfile(name: name, gender: gender, level: level, dominantHand: dominantHand.isEmpty ? nil : dominantHand, trainingGoal: cleanedGoal.isEmpty ? nil : cleanedGoal)); AthleteProfileStore.save(profiles); name = ""; gender = ""; level = ""; dominantHand = ""; trainingGoal = "" }
                 }
             }.navigationTitle("运动员资料").toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
         }

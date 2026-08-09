@@ -6,7 +6,7 @@ struct ThemePaletteView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("球场配色").font(.headline)
+                ACESectionTitle(title: "报告配色", subtitle: "仅影响生成的复盘报告，不改变 App 的可读性。")
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(ACEPalette.presets) { palette in
                         Button { theme.selectedID = palette.id } label: {
@@ -43,7 +43,7 @@ struct ThemePaletteView: View {
             }.padding(18)
         }
         .background(ACETheme.cream.ignoresSafeArea())
-        .navigationTitle("主题配色")
+        .navigationTitle("报告配色")
         .navigationBarTitleDisplayMode(.inline)
     }
 

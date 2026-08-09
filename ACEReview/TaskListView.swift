@@ -7,7 +7,6 @@ struct TaskListView: View {
     @State private var filter = TaskFilter.all
     @State private var selectedTask: TaskItem?
     @State private var searchText = ""
-    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         ZStack {
@@ -15,7 +14,6 @@ struct TaskListView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
                     header
-                    searchField
                     taskFilters
                     if !uploads.orderedSnapshots.isEmpty {
                         ForEach(uploads.orderedSnapshots) { item in
@@ -56,8 +54,12 @@ struct TaskListView: View {
                 .padding(.bottom, 30)
             }
             .scrollDismissesKeyboard(.interactively)
-            .simultaneousGesture(TapGesture().onEnded { isSearchFocused = false })
         }
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "训练、运动员或重点关注"
+        )
         .refreshable { await taskStore.load() }
         .task {
             await taskStore.load()
@@ -70,68 +72,36 @@ struct TaskListView: View {
             if task.isComplete { ReviewReportView(task: task) }
             else { TaskProgressView(task: task, store: taskStore) }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button { isSearchFocused = false } label: {
-                    Image(systemName: "keyboard.chevron.compact.down")
-                }
-                .accessibilityLabel("收起键盘")
-            }
-        }
     }
 
     private var header: some View {
-        HStack {
-            Spacer()
-            HStack(spacing: 8) {
-                ACEBrandMark(size: 29)
-                Text("ACE Review").font(.system(size: 17, weight: .semibold, design: .serif)).foregroundStyle(ACETheme.green)
-            }
-            Spacer()
-            Image(systemName: "magnifyingglass").foregroundStyle(ACETheme.ink)
+        ACEPageHeader(
+            eyebrow: "LIBRARY",
+            title: "任务库",
+            subtitle: "上传、分析和报告状态集中在这里。"
+        ) {
+            ACEStatusPill(
+                title: "\(taskStore.tasks.count) 条",
+                color: ACETheme.green,
+                systemImage: "tray.full"
+            )
         }
-        .overlay(alignment: .bottomLeading) {
-            Text("任务库")
-                .font(.system(size: 31, weight: .bold, design: .rounded))
-                .foregroundStyle(ACETheme.ink)
-                .offset(y: 46)
-        }
-        .padding(.bottom, 46)
     }
 
     private var taskFilters: some View {
-        HStack(spacing: 8) {
-            ForEach(TaskFilter.allCases) { item in
-                Button(item.title) { isSearchFocused = false; filter = item }
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(filter == item ? .white : ACETheme.ink)
-                    .padding(.horizontal, 15).padding(.vertical, 8)
-                    .background(filter == item ? ACETheme.green : ACETheme.paper)
-                    .clipShape(Capsule())
-                    .overlay { Capsule().stroke(filter == item ? .clear : ACETheme.line, lineWidth: 1) }
-            }
-        }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "magnifyingglass").foregroundStyle(ACETheme.muted)
-            TextField("训练、运动员、时间或重点关注", text: $searchText)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
-                .focused($isSearchFocused)
-                .submitLabel(.done)
-                .onSubmit { isSearchFocused = false }
-            if !searchText.isEmpty {
-                Button { searchText = ""; isSearchFocused = false } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(ACETheme.muted)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(TaskFilter.allCases) { item in
+                    Button(item.title) { filter = item }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(filter == item ? .white : ACETheme.muted)
+                        .padding(.horizontal, 16).padding(.vertical, 9)
+                        .background(filter == item ? ACETheme.green : ACETheme.paper)
+                        .clipShape(Capsule())
+                        .overlay { Capsule().stroke(filter == item ? .clear : ACETheme.line, lineWidth: 1) }
                 }
             }
         }
-        .padding(.horizontal, 13).padding(.vertical, 10)
-        .background(ACETheme.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 12).stroke(ACETheme.line, lineWidth: 1) }
     }
 
     private var visibleTasks: [TaskItem] {
@@ -223,13 +193,13 @@ private struct LibraryTaskRow: View {
     let task: TaskItem
     let localUpload: UploadSnapshot?
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             ZStack(alignment: .topLeading) {
-                TennisCourtThumbnail().frame(width: 108, height: 67)
+                TennisCourtThumbnail().frame(width: 92, height: 76)
                 Image(systemName: task.isComplete ? "checkmark" : task.status == "failed" ? "exclamationmark" : "play.fill")
                     .font(.caption.bold()).foregroundStyle(.white).padding(6).background(statusColor).clipShape(Circle()).padding(5)
             }
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack { Text(task.title).font(.subheadline.bold()).lineLimit(1); Spacer(); statusBadge }
                 HStack(spacing: 8) {
                     Text(formattedDate(task.createdAt))
@@ -237,20 +207,21 @@ private struct LibraryTaskRow: View {
                 }.font(.caption).foregroundStyle(ACETheme.muted)
                 if task.isActive {
                     ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green)
-                    Text("\(Int(displayedProgress.rounded()))% · \(displayMessage)").font(.caption2).foregroundStyle(ACETheme.muted).lineLimit(1)
+                    Text("\(Int(displayedProgress.rounded()))% · \(displayMessage)").font(.caption2).foregroundStyle(ACETheme.muted).lineLimit(2)
                 } else if task.isComplete {
                     Text("报告已生成").font(.caption).foregroundStyle(ACETheme.green)
                 } else {
-                    Text(task.failureReason).font(.caption).foregroundStyle(.red).lineLimit(1)
+                    Text(task.failureReason).font(.caption).foregroundStyle(ACETheme.danger).lineLimit(2)
                 }
             }
         }
-        .padding(11)
+        .padding(14)
         .background(ACETheme.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(ACETheme.line.opacity(0.8), lineWidth: 1) }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(ACETheme.line, lineWidth: 1) }
+        .shadow(color: Color.black.opacity(0.035), radius: 10, y: 4)
     }
-    private var statusColor: Color { task.isComplete ? ACETheme.green : task.status == "failed" ? .red : ACETheme.green.opacity(0.85) }
+    private var statusColor: Color { task.isComplete ? ACETheme.green : task.status == "failed" ? ACETheme.danger : ACETheme.green }
     private var displayedProgress: Double {
         guard let localUpload else { return Double(task.progress) }
         if localUpload.totalBytes > 0 {
@@ -263,7 +234,7 @@ private struct LibraryTaskRow: View {
         guard let localUpload else { return task.clientMessage.isEmpty ? task.stage : task.clientMessage }
         return localUpload.message
     }
-    private var statusBadge: some View { Text(statusName).font(.caption2.bold()).padding(.horizontal, 9).padding(.vertical, 4).foregroundStyle(statusColor).background(statusColor.opacity(0.11)).clipShape(Capsule()) }
+    private var statusBadge: some View { ACEStatusPill(title: statusName, color: statusColor) }
     private var statusName: String {
         if localUpload?.message.hasPrefix("排队中") == true { return "排队中" }
         switch task.status {
@@ -493,6 +464,7 @@ private struct ReviewReportView: View {
 private struct AuthenticatedVideoView: View {
     let path: String
     @State private var player: AVPlayer?
+    @State private var localVideoURL: URL?
     @State private var error = ""
 
     var body: some View {
@@ -516,8 +488,17 @@ private struct AuthenticatedVideoView: View {
                 let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
                 try? FileManager.default.removeItem(at: destination)
                 try FileManager.default.moveItem(at: localURL, to: destination)
+                localVideoURL = destination
                 player = AVPlayer(url: destination)
             } catch let failure { error = failure.localizedDescription }
+        }
+        .onDisappear {
+            player?.pause()
+            player = nil
+            if let localVideoURL {
+                try? FileManager.default.removeItem(at: localVideoURL)
+                self.localVideoURL = nil
+            }
         }
     }
 

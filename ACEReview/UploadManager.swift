@@ -211,6 +211,8 @@ private final class UploadSlot: NSObject, ObservableObject {
         analysisScope: String,
         athleteGender: String,
         athleteLevel: String,
+        athleteHandedness: String,
+        athleteGoal: String,
         onTaskCreated: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (String) -> Void = { _ in }
     ) {
@@ -258,7 +260,9 @@ private final class UploadSlot: NSObject, ObservableObject {
                     reportTheme: ThemeStore.shared.palette,
                     analysisScope: analysisScope,
                     athleteGender: athleteGender,
-                    athleteLevel: athleteLevel
+                    athleteLevel: athleteLevel,
+                    athleteHandedness: athleteHandedness,
+                    athleteGoal: athleteGoal
                 )
                 let folder = try self.uploadDirectory(taskID: response.task.id)
                 let newManifest = UploadManifest(
@@ -367,7 +371,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                     self?.preparationTimer = nil
                     return
                 }
-                if self.waitingForUploadGate {
+                if self.isWaitingForUploadGate {
                     self.snapshot.isShowingPreparation = true
                     self.snapshot.message = "排队中，等待前一个视频上传完成"
                     return
@@ -615,7 +619,7 @@ private final class UploadSlot: NSObject, ObservableObject {
             guard let self else { return }
             let immediatelyAvailable = Self.uploadGate.wait(timeout: .now()) == .success
             if !immediatelyAvailable {
-                self.waitingForUploadGate = true
+                self.setWaitingForUploadGate(true)
                 self.publish {
                     self.snapshot.isShowingPreparation = true
                     self.snapshot.message = "排队中，等待前一个视频上传完成"
@@ -648,6 +652,18 @@ private final class UploadSlot: NSObject, ObservableObject {
         holdsUploadGate = false
         lock.unlock()
         Self.uploadGate.signal()
+    }
+
+    private var isWaitingForUploadGate: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return waitingForUploadGate
+    }
+
+    private func setWaitingForUploadGate(_ value: Bool) {
+        lock.lock()
+        waitingForUploadGate = value
+        lock.unlock()
     }
 
     private func captureLocationText(_ location: CLLocation?) async -> String? {
@@ -1051,6 +1067,8 @@ final class UploadManager: ObservableObject {
         analysisScope: String,
         athleteGender: String,
         athleteLevel: String,
+        athleteHandedness: String,
+        athleteGoal: String,
         onTaskCreated: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (String) -> Void = { _ in }
     ) {
@@ -1071,6 +1089,8 @@ final class UploadManager: ObservableObject {
             analysisScope: analysisScope,
             athleteGender: athleteGender,
             athleteLevel: athleteLevel,
+            athleteHandedness: athleteHandedness,
+            athleteGoal: athleteGoal,
             onTaskCreated: onTaskCreated,
             onFailure: onFailure
         )

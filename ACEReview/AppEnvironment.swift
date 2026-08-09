@@ -66,15 +66,28 @@ extension Color {
 }
 
 enum ACETheme {
-    private static var palette: ACEPalette { ThemeStore.shared.palette }
-    static var ink: Color { Color(aceHex: "17231C") }
-    static var green: Color { Color(aceHex: palette.primary) }
-    static var lime: Color { Color(aceHex: palette.accent) }
-    static var coral: Color { Color(aceHex: palette.accent) }
-    static var cream: Color { Color(aceHex: palette.background) }
-    static var paper: Color { Color(aceHex: palette.card) }
-    static var muted: Color { green.opacity(0.70) }
-    static var line: Color { green.opacity(0.20) }
+    // App chrome stays accessible and predictable. ThemeStore customizes the
+    // generated report only; arbitrary report colors must not reduce app text
+    // contrast or make controls appear disabled.
+    static let ink = Color(aceHex: "142018")
+    static let green = Color(aceHex: "176B45")
+    static let lime = Color(aceHex: "A8D96E")
+    static let coral = Color(aceHex: "E96B4B")
+    static let cream = Color(aceHex: "F5F7F3")
+    static let paper = Color.white
+    static let muted = Color(aceHex: "637168")
+    static let line = Color(aceHex: "DCE4DE")
+    static let softGreen = Color(aceHex: "EAF4ED")
+    static let warning = Color(aceHex: "B65C20")
+    static let danger = Color(aceHex: "C63C3C")
+
+    static var heroGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(aceHex: "0D5737"), green, Color(aceHex: "358A57")],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 }
 
 struct ACEBackground: View {
@@ -91,6 +104,81 @@ struct ACEBrandMark: View {
             Circle().stroke(ACETheme.lime.opacity(0.72), lineWidth: size * 0.05).padding(size * 0.15)
             Circle().trim(from: 0.12, to: 0.47).stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: size * 0.045, lineCap: .round)).rotationEffect(.degrees(-18)).padding(size * 0.24)
         }.frame(width: size, height: size)
+    }
+}
+
+struct ACEPageHeader<Trailing: View>: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    let trailing: Trailing
+
+    init(
+        eyebrow: String,
+        title: String,
+        subtitle: String,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.eyebrow = eyebrow
+        self.title = title
+        self.subtitle = subtitle
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(eyebrow.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.4)
+                    .foregroundStyle(ACETheme.green)
+                Text(title)
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundStyle(ACETheme.ink)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(ACETheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+    }
+}
+
+extension ACEPageHeader where Trailing == EmptyView {
+    init(eyebrow: String, title: String, subtitle: String) {
+        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle) { EmptyView() }
+    }
+}
+
+struct ACEStatusPill: View {
+    let title: String
+    let color: Color
+    var systemImage: String?
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let systemImage { Image(systemName: systemImage) }
+            Text(title)
+        }
+        .font(.caption2.weight(.bold))
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.11), in: Capsule())
+    }
+}
+
+struct ACESectionTitle: View {
+    let title: String
+    var subtitle: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.headline).foregroundStyle(ACETheme.ink)
+            if let subtitle { Text(subtitle).font(.caption).foregroundStyle(ACETheme.muted) }
+        }
     }
 }
 
@@ -160,11 +248,11 @@ extension View {
         self
             .padding(20)
             .background(ACETheme.paper)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(ACETheme.line.opacity(0.72), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(ACETheme.line, lineWidth: 1)
             }
-            .shadow(color: ACETheme.green.opacity(0.07), radius: 16, y: 6)
+            .shadow(color: Color.black.opacity(0.045), radius: 14, y: 6)
     }
 }
