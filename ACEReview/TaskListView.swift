@@ -7,6 +7,7 @@ struct TaskListView: View {
     @State private var filter = TaskFilter.all
     @State private var selectedTask: TaskItem?
     @State private var searchText = ""
+    @AppStorage("ace.settings.compactLibrary") private var compactLibrary = false
 
     var body: some View {
         ZStack {
@@ -38,7 +39,7 @@ struct TaskListView: View {
                         LazyVStack(spacing: 10) {
                             ForEach(visibleTasks) { task in
                                 Button { selectedTask = task } label: {
-                                    LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id))
+                                    LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id), compact: compactLibrary)
                                 }
                                     .buttonStyle(.plain)
                                     .contextMenu {
@@ -94,7 +95,7 @@ struct TaskListView: View {
                 ForEach(TaskFilter.allCases) { item in
                     Button(item.title) { filter = item }
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(filter == item ? .white : ACETheme.muted)
+                        .foregroundStyle(filter == item ? ACETheme.onPrimary : ACETheme.cardMuted)
                         .padding(.horizontal, 16).padding(.vertical, 9)
                         .background(filter == item ? ACETheme.green : ACETheme.paper)
                         .clipShape(Capsule())
@@ -192,22 +193,23 @@ private enum TaskFilter: String, CaseIterable, Identifiable {
 private struct LibraryTaskRow: View {
     let task: TaskItem
     let localUpload: UploadSnapshot?
+    let compact: Bool
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 13) {
             ZStack(alignment: .topLeading) {
-                TennisCourtThumbnail().frame(width: 92, height: 76)
+                TennisCourtThumbnail().frame(width: compact ? 68 : 82, height: compact ? 60 : 70)
                 Image(systemName: task.isComplete ? "checkmark" : task.status == "failed" ? "exclamationmark" : "play.fill")
                     .font(.caption.bold()).foregroundStyle(.white).padding(6).background(statusColor).clipShape(Circle()).padding(5)
             }
-            VStack(alignment: .leading, spacing: 6) {
-                HStack { Text(task.title).font(.subheadline.bold()).lineLimit(1); Spacer(); statusBadge }
+            VStack(alignment: .leading, spacing: compact ? 4 : 6) {
+                HStack { Text(task.title).font(.subheadline.bold()).foregroundStyle(ACETheme.cardInk).lineLimit(1); Spacer(); statusBadge }
                 HStack(spacing: 8) {
                     Text(formattedDate(task.createdAt))
                     if let player = task.player, !player.isEmpty { Text("运动员：\(player)").lineLimit(1) }
-                }.font(.caption).foregroundStyle(ACETheme.muted)
+                }.font(.caption).foregroundStyle(ACETheme.cardMuted)
                 if task.isActive {
                     ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green)
-                    Text("\(Int(displayedProgress.rounded()))% · \(displayMessage)").font(.caption2).foregroundStyle(ACETheme.muted).lineLimit(2)
+                    Text("\(Int(displayedProgress.rounded()))% · \(displayMessage)").font(.caption2).foregroundStyle(ACETheme.cardMuted).lineLimit(compact ? 1 : 2)
                 } else if task.isComplete {
                     Text("报告已生成").font(.caption).foregroundStyle(ACETheme.green)
                 } else {
@@ -215,11 +217,11 @@ private struct LibraryTaskRow: View {
                 }
             }
         }
-        .padding(14)
+        .padding(compact ? 11 : 13)
         .background(ACETheme.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(ACETheme.line, lineWidth: 1) }
-        .shadow(color: Color.black.opacity(0.035), radius: 10, y: 4)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 2).fill(statusColor).frame(width: 4).padding(.vertical, 13) }
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(ACETheme.cardLine, lineWidth: 1) }
     }
     private var statusColor: Color { task.isComplete ? ACETheme.green : task.status == "failed" ? ACETheme.danger : ACETheme.green }
     private var displayedProgress: Double {

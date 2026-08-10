@@ -223,90 +223,69 @@ struct NewReviewView: View {
 
     private var detailsSheet: some View {
         NavigationStack {
-            Form {
-                Section("视频信息") {
-                    TextField("复盘名称", text: $title).focused($focusedField, equals: .title)
-                    TextField("想重点查看什么（选填）", text: $notes, axis: .vertical)
-                        .focused($focusedField, equals: .notes)
-                        .submitLabel(.done)
-                        .onSubmit { dismissKeyboard() }
-                }
-                Section("运动员信息（可选）") {
-                    Text("选择运动员后，系统会结合其性别和基础水平给出更贴合的分析建议。")
-                        .font(.caption).foregroundStyle(ACETheme.muted)
-                    HStack {
-                        Text("选择运动员").font(.subheadline)
-                        Spacer()
-                        Menu {
-                            Button("未选择") { player = ""; athleteGender = ""; athleteLevel = ""; athleteHandedness = ""; athleteGoal = "" }
-                            ForEach(athleteProfiles) { profile in
-                                Button(profile.name) { player = profile.name; athleteGender = profile.gender; athleteLevel = profile.level; athleteHandedness = profile.dominantHand ?? ""; athleteGoal = profile.trainingGoal ?? "" }
+            ZStack {
+                ACEBackground()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        HStack(spacing: 12) {
+                            ACEIconBadge(systemImage: "sparkles", size: 46)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("配置本次复盘").font(.title3.bold()).foregroundStyle(ACETheme.ink)
+                                Text("只需确认三项，上传后可离开此页").font(.caption).foregroundStyle(ACETheme.muted)
                             }
-                            Divider()
-                        } label: {
-                            Text(player.isEmpty ? "选择运动员" : player).foregroundStyle(ACETheme.green)
                         }
-                    }
-                    Button { dismissKeyboard(); DispatchQueue.main.async { showAthleteProfiles = true } } label: {
-                        Label("新建或管理运动员资料", systemImage: "person.crop.circle.badge.plus")
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    if !athleteGender.isEmpty || !athleteLevel.isEmpty || !athleteHandedness.isEmpty || !athleteGoal.isEmpty {
-                        Text([athleteGender, athleteLevel, athleteHandedness, athleteGoal].filter { !$0.isEmpty }.joined(separator: " · "))
-                            .font(.caption).foregroundStyle(ACETheme.muted)
-                    }
-                }
-                Section {
-                    Picker("分析范围", selection: $analysisScope) {
-                        Text("完整报告").tag("full_report")
-                        Text("先生成 Cut").tag("cuts_only")
-                    }
-                    .pickerStyle(.segmented)
-                    Text(analysisScope == "cuts_only" ? "仅整理可回看的训练回合，之后再按需生成逐拍报告。" : "直接生成完整逐拍报告；分析完成前只显示总进度，不提前展示分片。")
-                        .font(.caption).foregroundStyle(ACETheme.muted)
-                }
-                Section {
-                    Button(action: {
-                        guard let asset = selectedAsset else { return }
-                        isSubmitting = true
-                        uploadError = ""
-                        uploads.begin(
-                            asset: asset,
-                            title: title,
-                            player: player,
-                            notes: composedNotes,
-                            analysisScope: analysisScope,
-                            athleteGender: athleteGender,
-                            athleteLevel: athleteLevel,
-                            athleteHandedness: athleteHandedness,
-                            athleteGoal: athleteGoal,
-                            onTaskCreated: { taskID in
-                                displayedTaskID = taskID
-                                isSubmitting = false
-                                showDetails = false
-                                selectedAsset = nil
-                                title = ""
-                                player = ""
-                                athleteGender = ""
-                                athleteLevel = ""
-                                athleteHandedness = ""
-                                athleteGoal = ""
-                                notes = ""
-                                analysisScope = "full_report"
-                                onSubmitted()
-                            },
-                            onFailure: { message in
-                                isSubmitting = false
-                                uploadError = message
+
+                        sheetSection("1 · 视频信息", subtitle: "命名并告诉分析引擎你最关心什么") {
+                            VStack(spacing: 0) {
+                                TextField("复盘名称", text: $title).focused($focusedField, equals: .title).padding(16)
+                                Divider().overlay(ACETheme.cardLine).padding(.leading, 16)
+                                TextField("重点关注（选填）", text: $notes, axis: .vertical)
+                                    .lineLimit(2...4).focused($focusedField, equals: .notes).padding(16)
+                            }.foregroundStyle(ACETheme.cardInk).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        }
+
+                        sheetSection("2 · 运动员", subtitle: "性别、水平、惯用手和目标会参与综合判断") {
+                            ACEGroupCard {
+                                VStack(spacing: 0) {
+                                    Menu {
+                                        Button("未选择") { clearAthlete() }
+                                        ForEach(athleteProfiles) { profile in Button(profile.name) { selectAthlete(profile) } }
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            ACEIconBadge(systemImage: "figure.tennis", size: 38)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(player.isEmpty ? "选择运动员" : player).font(.subheadline.weight(.semibold)).foregroundStyle(ACETheme.cardInk)
+                                                Text(player.isEmpty ? "可跳过，仍可进行通用分析" : athleteSummary).font(.caption).foregroundStyle(ACETheme.cardMuted).lineLimit(2)
+                                            }
+                                            Spacer(); Image(systemName: "chevron.up.chevron.down").font(.caption.bold()).foregroundStyle(ACETheme.green)
+                                        }.padding(15)
+                                    }
+                                    Divider().overlay(ACETheme.cardLine).padding(.leading, 66)
+                                    Button { dismissKeyboard(); DispatchQueue.main.async { showAthleteProfiles = true } } label: {
+                                        ACESettingsRow(icon: "person.crop.circle.badge.plus", title: "新建或管理运动员资料", subtitle: "完善个人情况，让建议更贴合")
+                                    }.buttonStyle(.plain)
+                                }
                             }
-                        )
-                    }) {
-                        Text(isSubmitting ? "正在创建任务..." : "开始云端分析")
+                        }
+
+                        sheetSection("3 · 分析方式", subtitle: "根据观看习惯选择，后续仍可继续深入") {
+                            HStack(spacing: 10) {
+                                scopeOption("完整报告", "直接完成全量逐拍分析", "doc.text.magnifyingglass", value: "full_report")
+                                scopeOption("先看 Cut", "先整理回合，再按需深入", "scissors", value: "cuts_only")
+                            }
+                            Text(analysisScope == "cuts_only" ? "先快速生成可回看的训练回合；解析任一 Cut 后即有阶段评分，解析更多后自动更新。" : "直接生成完整逐拍报告；完成前只展示总进度，不提前显示分片。")
+                                .font(.caption).foregroundStyle(ACETheme.muted).padding(.horizontal, 2)
+                        }
+
+                        Button(action: submitReview) {
+                            PrimaryActionLabel(title: isSubmitting ? "正在创建任务" : "开始云端分析", systemImage: "arrow.up.circle.fill", isWorking: isSubmitting)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(selectedAsset == nil || !uploads.canStartUpload || isSubmitting || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Text("视频将安全上传；多段视频串行上传，上传完成后云端可并行分析。")
+                            .font(.caption2).foregroundStyle(ACETheme.muted).frame(maxWidth: .infinity).multilineTextAlignment(.center)
                     }
-                    .overlay { if isSubmitting { ProgressView().tint(ACETheme.green) } }
-                    .frame(maxWidth: .infinity)
-                    .foregroundStyle(ACETheme.green)
-                    .disabled(selectedAsset == nil || !uploads.canStartUpload || isSubmitting)
+                    .padding(18).padding(.bottom, 24)
                 }
             }
             .navigationTitle("提交复盘")
@@ -330,6 +309,40 @@ struct NewReviewView: View {
             }
             .tint(ACETheme.green)
         }
+    }
+
+    private func sheetSection<Content: View>(_ title: String, subtitle: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title).font(.headline).foregroundStyle(ACETheme.ink)
+            Text(subtitle).font(.caption).foregroundStyle(ACETheme.muted)
+            content()
+        }
+    }
+
+    private func scopeOption(_ title: String, _ subtitle: String, _ icon: String, value: String) -> some View {
+        Button { analysisScope = value } label: {
+            VStack(alignment: .leading, spacing: 9) {
+                HStack { Image(systemName: icon).foregroundStyle(analysisScope == value ? ACETheme.onPrimary : ACETheme.green); Spacer(); Image(systemName: analysisScope == value ? "checkmark.circle.fill" : "circle").foregroundStyle(analysisScope == value ? ACETheme.onPrimary : ACETheme.cardMuted) }
+                Text(title).font(.subheadline.bold())
+                Text(subtitle).font(.caption2).opacity(0.72).fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(analysisScope == value ? ACETheme.onPrimary : ACETheme.cardInk)
+            .padding(15).frame(maxWidth: .infinity, minHeight: 126, alignment: .topLeading)
+            .background(analysisScope == value ? ACETheme.green : ACETheme.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }.buttonStyle(.plain)
+    }
+
+    private var athleteSummary: String { [athleteGender, athleteLevel, athleteHandedness, athleteGoal].filter { !$0.isEmpty }.joined(separator: " · ") }
+    private func clearAthlete() { player = ""; athleteGender = ""; athleteLevel = ""; athleteHandedness = ""; athleteGoal = "" }
+    private func selectAthlete(_ profile: AthleteProfile) { player = profile.name; athleteGender = profile.gender; athleteLevel = profile.level; athleteHandedness = profile.dominantHand ?? ""; athleteGoal = profile.trainingGoal ?? "" }
+
+    private func submitReview() {
+        guard let asset = selectedAsset else { return }
+        isSubmitting = true; uploadError = ""
+        uploads.begin(asset: asset, title: title, player: player, notes: composedNotes, analysisScope: analysisScope, athleteGender: athleteGender, athleteLevel: athleteLevel, athleteHandedness: athleteHandedness, athleteGoal: athleteGoal, onTaskCreated: { taskID in
+            displayedTaskID = taskID; isSubmitting = false; showDetails = false; selectedAsset = nil; title = ""; clearAthlete(); notes = ""; analysisScope = "full_report"; onSubmitted()
+        }, onFailure: { message in isSubmitting = false; uploadError = message })
     }
 
     private func progress(for snapshot: UploadSnapshot) -> Double {

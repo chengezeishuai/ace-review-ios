@@ -72,6 +72,7 @@ enum ACETheme {
     // colors are derived from luminance so a custom background cannot make the
     // interface unreadable.
     static var ink: Color { isDark(palette.background) ? .white : Color(aceHex: "142018") }
+    static var cardInk: Color { isDark(palette.card) ? .white : Color(aceHex: "142018") }
     static var green: Color { Color(aceHex: palette.primary) }
     static var lime: Color { Color(aceHex: palette.accent) }
     static let coral = Color(aceHex: "E96B4B")
@@ -79,6 +80,8 @@ enum ACETheme {
     static var paper: Color { Color(aceHex: palette.card) }
     static var muted: Color { ink.opacity(0.62) }
     static var line: Color { ink.opacity(0.13) }
+    static var cardMuted: Color { cardInk.opacity(0.62) }
+    static var cardLine: Color { cardInk.opacity(0.12) }
     static var softGreen: Color { green.opacity(isDark(palette.background) ? 0.24 : 0.10) }
     static var onPrimary: Color { isDark(palette.primary) ? .white : Color(aceHex: "142018") }
     static let warning = Color(aceHex: "B65C20")
@@ -116,6 +119,79 @@ struct ACEBrandMark: View {
             Circle().stroke(ACETheme.lime.opacity(0.72), lineWidth: size * 0.05).padding(size * 0.15)
             Circle().trim(from: 0.12, to: 0.47).stroke(ACETheme.onPrimary.opacity(0.9), style: StrokeStyle(lineWidth: size * 0.045, lineCap: .round)).rotationEffect(.degrees(-18)).padding(size * 0.24)
         }.frame(width: size, height: size)
+    }
+}
+
+struct ACEIconBadge: View {
+    let systemImage: String
+    var color = ACETheme.green
+    var size: CGFloat = 40
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.42, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: size, height: size)
+            .background(color.opacity(0.11), in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
+    }
+}
+
+struct ACESettingsRow<Trailing: View>: View {
+    let icon: String
+    let title: String
+    let subtitle: String?
+    let tint: Color
+    let trailing: Trailing
+
+    init(
+        icon: String,
+        title: String,
+        subtitle: String? = nil,
+        tint: Color = ACETheme.green,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.tint = tint
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 13) {
+            ACEIconBadge(systemImage: icon, color: tint, size: 38)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(ACETheme.cardInk)
+                if let subtitle { Text(subtitle).font(.caption).foregroundStyle(ACETheme.cardMuted).lineLimit(2) }
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+}
+
+extension ACESettingsRow where Trailing == Image {
+    init(icon: String, title: String, subtitle: String? = nil, tint: Color = ACETheme.green) {
+        self.init(icon: icon, title: title, subtitle: subtitle, tint: tint) {
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(ACETheme.cardMuted)
+        }
+    }
+}
+
+struct ACEGroupCard<Content: View>: View {
+    let content: Content
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
+
+    var body: some View {
+        content
+            .background(ACETheme.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(ACETheme.cardLine, lineWidth: 1) }
     }
 }
 
@@ -263,7 +339,7 @@ extension View {
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(ACETheme.line, lineWidth: 1)
+                    .stroke(ACETheme.cardLine, lineWidth: 1)
             }
             .shadow(color: Color.black.opacity(0.045), radius: 14, y: 6)
     }
