@@ -66,27 +66,39 @@ extension Color {
 }
 
 enum ACETheme {
-    // App chrome stays accessible and predictable. ThemeStore customizes the
-    // generated report only; arbitrary report colors must not reduce app text
-    // contrast or make controls appear disabled.
-    static let ink = Color(aceHex: "142018")
-    static let green = Color(aceHex: "176B45")
-    static let lime = Color(aceHex: "A8D96E")
+    private static var palette: ACEPalette { ThemeStore.shared.palette }
+
+    // The selected palette drives both App chrome and generated reports. Text
+    // colors are derived from luminance so a custom background cannot make the
+    // interface unreadable.
+    static var ink: Color { isDark(palette.background) ? .white : Color(aceHex: "142018") }
+    static var green: Color { Color(aceHex: palette.primary) }
+    static var lime: Color { Color(aceHex: palette.accent) }
     static let coral = Color(aceHex: "E96B4B")
-    static let cream = Color(aceHex: "F5F7F3")
-    static let paper = Color.white
-    static let muted = Color(aceHex: "637168")
-    static let line = Color(aceHex: "DCE4DE")
-    static let softGreen = Color(aceHex: "EAF4ED")
+    static var cream: Color { Color(aceHex: palette.background) }
+    static var paper: Color { Color(aceHex: palette.card) }
+    static var muted: Color { ink.opacity(0.62) }
+    static var line: Color { ink.opacity(0.13) }
+    static var softGreen: Color { green.opacity(isDark(palette.background) ? 0.24 : 0.10) }
+    static var onPrimary: Color { isDark(palette.primary) ? .white : Color(aceHex: "142018") }
     static let warning = Color(aceHex: "B65C20")
     static let danger = Color(aceHex: "C63C3C")
 
     static var heroGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(aceHex: "0D5737"), green, Color(aceHex: "358A57")],
+            colors: [green.opacity(0.92), green, lime.opacity(0.88)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    private static func isDark(_ hex: String) -> Bool {
+        let value = UInt64(hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted), radix: 16) ?? 0
+        func channel(_ shift: UInt64) -> Double {
+            let component = Double((value >> shift) & 0xFF) / 255
+            return component <= 0.03928 ? component / 12.92 : pow((component + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0) < 0.42
     }
 }
 
@@ -102,7 +114,7 @@ struct ACEBrandMark: View {
         ZStack {
             Circle().fill(ACETheme.green)
             Circle().stroke(ACETheme.lime.opacity(0.72), lineWidth: size * 0.05).padding(size * 0.15)
-            Circle().trim(from: 0.12, to: 0.47).stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: size * 0.045, lineCap: .round)).rotationEffect(.degrees(-18)).padding(size * 0.24)
+            Circle().trim(from: 0.12, to: 0.47).stroke(ACETheme.onPrimary.opacity(0.9), style: StrokeStyle(lineWidth: size * 0.045, lineCap: .round)).rotationEffect(.degrees(-18)).padding(size * 0.24)
         }.frame(width: size, height: size)
     }
 }
@@ -211,7 +223,7 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 16, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(ACETheme.onPrimary)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 24)
             .padding(.vertical, 15)
@@ -230,7 +242,7 @@ struct PrimaryActionLabel: View {
         HStack(spacing: 9) {
             if isWorking {
                 ProgressView()
-                    .tint(.white)
+                    .tint(ACETheme.onPrimary)
             }
             Text(title)
                 .multilineTextAlignment(.center)

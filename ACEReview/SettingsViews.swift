@@ -6,7 +6,7 @@ struct ThemePaletteView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                ACESectionTitle(title: "报告配色", subtitle: "仅影响生成的复盘报告，不改变 App 的可读性。")
+                ACESectionTitle(title: "主题配色", subtitle: "同步应用于 App 与新生成的复盘报告；文字对比度会自动适配。")
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(ACEPalette.presets) { palette in
                         Button { theme.selectedID = palette.id } label: {
@@ -43,7 +43,7 @@ struct ThemePaletteView: View {
             }.padding(18)
         }
         .background(ACETheme.cream.ignoresSafeArea())
-        .navigationTitle("报告配色")
+        .navigationTitle("主题配色")
         .navigationBarTitleDisplayMode(.inline)
     }
 
