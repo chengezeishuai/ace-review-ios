@@ -105,6 +105,16 @@ struct ReportSummary: Decodable {
         let match = metric.value.range(of: #"\d+(?:\.\d+)?"#, options: .regularExpression)
         return match.flatMap { Double(metric.value[$0]) }
     }
+
+    var scoreStatus: String? {
+        metrics.first(where: { $0.label == "评分状态" })?.value
+    }
+
+    var scoreCoverage: String? {
+        metrics.first(where: { $0.label == "已解析回合" })?.value
+    }
+
+    var isPartialScore: Bool { scoreStatus == "阶段评分" }
 }
 
 struct ProgressiveCutsResponse: Decodable {
