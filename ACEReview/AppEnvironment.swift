@@ -136,14 +136,14 @@ struct ACEIconBadge: View {
     }
 }
 
-struct ACESettingsRow<Trailing: View>: View {
+struct ACESettingsRow: View {
     let icon: String
     let title: String
     let subtitle: String?
     let tint: Color
-    let trailing: Trailing
+    let trailing: AnyView
 
-    init(
+    init<Trailing: View>(
         icon: String,
         title: String,
         subtitle: String? = nil,
@@ -154,7 +154,7 @@ struct ACESettingsRow<Trailing: View>: View {
         self.title = title
         self.subtitle = subtitle
         self.tint = tint
-        self.trailing = trailing()
+        self.trailing = AnyView(trailing())
     }
 
     var body: some View {
@@ -173,7 +173,7 @@ struct ACESettingsRow<Trailing: View>: View {
     }
 }
 
-extension ACESettingsRow where Trailing == Image {
+extension ACESettingsRow {
     init(icon: String, title: String, subtitle: String? = nil, tint: Color = ACETheme.green) {
         self.init(icon: icon, title: title, subtitle: subtitle, tint: tint) {
             Image(systemName: "chevron.right")
