@@ -17,6 +17,7 @@ struct NewReviewView: View {
     @State private var athleteHandedness = ""
     @State private var athleteGoal = ""
     @State private var athleteProfiles = AthleteProfileStore.load()
+    @State private var showAthleteChooser = false
     @State private var showAthleteProfiles = false
     @State private var displayedTaskID = ""
     @FocusState private var focusedField: DetailField?
@@ -247,10 +248,7 @@ struct NewReviewView: View {
                         sheetSection("2 · 运动员", subtitle: "性别、水平、惯用手和目标会参与综合判断") {
                             ACEGroupCard {
                                 VStack(spacing: 0) {
-                                    Menu {
-                                        Button("未选择") { clearAthlete() }
-                                        ForEach(athleteProfiles) { profile in Button(profile.name) { selectAthlete(profile) } }
-                                    } label: {
+                                    Button { dismissKeyboard(); showAthleteChooser = true } label: {
                                         HStack(spacing: 12) {
                                             ACEIconBadge(systemImage: "figure.tennis", size: 38)
                                             VStack(alignment: .leading, spacing: 2) {
@@ -259,7 +257,7 @@ struct NewReviewView: View {
                                             }
                                             Spacer(); Image(systemName: "chevron.up.chevron.down").font(.caption.bold()).foregroundStyle(ACETheme.green)
                                         }.padding(15)
-                                    }
+                                    }.buttonStyle(.plain)
                                     Divider().overlay(ACETheme.cardLine).padding(.leading, 66)
                                     Button { dismissKeyboard(); DispatchQueue.main.async { showAthleteProfiles = true } } label: {
                                         ACESettingsRow(icon: "person.crop.circle.badge.plus", title: "新建或管理运动员资料", subtitle: "完善个人情况，让建议更贴合")
@@ -306,6 +304,16 @@ struct NewReviewView: View {
                     athleteHandedness = profile.dominantHand ?? ""
                     athleteGoal = profile.trainingGoal ?? ""
                 }
+            }
+            .sheet(isPresented: $showAthleteChooser) {
+                AthleteChooserSheet(profiles: athleteProfiles, selectedName: player, onSelect: { profile in
+                    if let profile { selectAthlete(profile) } else { clearAthlete() }
+                }, onManage: {
+                    showAthleteChooser = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showAthleteProfiles = true }
+                })
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .tint(ACETheme.green)
         }
@@ -389,6 +397,81 @@ enum AthleteProfileStore {
     static func load() -> [AthleteProfile] { guard let data = UserDefaults.standard.data(forKey: key), let value = try? JSONDecoder().decode([AthleteProfile].self, from: data) else { return [] }; return value }
     static func save(_ value: [AthleteProfile]) { UserDefaults.standard.set(try? JSONEncoder().encode(value), forKey: key) }
 }
+
+struct AthleteChooserSheet: View {
+    let profiles: [AthleteProfile]
+    let selectedName: String
+    let onSelect: (AthleteProfile?) -> Void
+    let onManage: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                ACEBackground()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("这次分析谁？").font(.system(size: 26, weight: .bold, design: .rounded)).foregroundStyle(ACETheme.ink)
+                            Text("选择后会结合其基础情况生成建议，也可以暂不指定。")
+                                .font(.subheadline).foregroundStyle(ACETheme.muted)
+                        }
+
+                        athleteOption(name: "暂不指定", detail: "使用通用运动分析标准", icon: "person.crop.circle.dashed", isSelected: selectedName.isEmpty) {
+                            onSelect(nil); dismiss()
+                        }
+                        ForEach(profiles) { profile in
+                            athleteOption(name: profile.name, detail: profileSummary(profile), icon: "figure.tennis", isSelected: selectedName == profile.name) {
+                                onSelect(profile); dismiss()
+                            }
+                        }
+                        if profiles.isEmpty {
+                            VStack(spacing: 9) {
+                                Image(systemName: "person.2.slash").font(.title2).foregroundStyle(ACETheme.green)
+                                Text("还没有运动员资料").font(.subheadline.bold()).foregroundStyle(ACETheme.cardInk)
+                                Text("可暂不指定，或先创建一份资料。做一次，之后可重复选择。")
+                                    .font(.caption).foregroundStyle(ACETheme.cardMuted).multilineTextAlignment(.center)
+                            }.frame(maxWidth: .infinity).aceCard()
+                        }
+                        Button(action: onManage) {
+                            Label(profiles.isEmpty ? "创建运动员资料" : "管理运动员资料", systemImage: "person.crop.circle.badge.plus")
+                                .frame(maxWidth: .infinity)
+                        }.buttonStyle(PrimaryButtonStyle())
+                    }.padding(18).padding(.bottom, 20)
+                }
+            }
+            .navigationTitle("选择运动员")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("关闭") { dismiss() }.foregroundStyle(ACETheme.green) } }
+        }
+    }
+
+    private func athleteOption(name: String, detail: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 13) {
+                ACEIconBadge(systemImage: icon, color: isSelected ? ACETheme.onPrimary : ACETheme.green, size: 44)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(name).font(.headline)
+                    Text(detail).font(.caption).opacity(0.7).lineLimit(2)
+                }
+                Spacer()
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title3).foregroundStyle(isSelected ? ACETheme.onPrimary : ACETheme.cardMuted)
+            }
+            .foregroundStyle(isSelected ? ACETheme.onPrimary : ACETheme.cardInk)
+            .padding(15)
+            .background(isSelected ? ACETheme.green : ACETheme.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(isSelected ? .clear : ACETheme.cardLine, lineWidth: 1) }
+        }.buttonStyle(.plain)
+    }
+
+    private func profileSummary(_ profile: AthleteProfile) -> String {
+        let value = [profile.gender, profile.level, profile.dominantHand ?? "", profile.trainingGoal ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        return value.isEmpty ? "尚未填写详细资料" : value
+    }
+}
+
 struct AthleteProfilesSheet: View {
     @Binding var profiles: [AthleteProfile]
     let onSelect: (AthleteProfile) -> Void
@@ -400,35 +483,79 @@ struct AthleteProfilesSheet: View {
     @State private var trainingGoal = ""
     var body: some View {
         NavigationStack {
-            List {
-                Section("已保存资料") {
-                    ForEach(profiles) { profile in
-                        Button { onSelect(profile); dismiss() } label: { VStack(alignment: .leading) { Text(profile.name); Text([profile.gender, profile.level, profile.dominantHand ?? "", profile.trainingGoal ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) } }
-                    }.onDelete { profiles.remove(atOffsets: $0); AthleteProfileStore.save(profiles) }
+            ZStack {
+                ACEBackground()
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text("已保存资料").font(.headline).foregroundStyle(ACETheme.ink)
+                        if profiles.isEmpty {
+                            Text("还没有资料，新建后会保存在本机。")
+                                .font(.subheadline).foregroundStyle(ACETheme.muted).aceCard()
+                        } else {
+                            ForEach(profiles) { profile in
+                                HStack(spacing: 12) {
+                                    ACEIconBadge(systemImage: "figure.tennis", size: 42)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(profile.name).font(.headline).foregroundStyle(ACETheme.cardInk)
+                                        Text(profileSummary(profile)).font(.caption).foregroundStyle(ACETheme.cardMuted).lineLimit(2)
+                                    }
+                                    Spacer()
+                                    Button(role: .destructive) { remove(profile) } label: { Image(systemName: "trash").foregroundStyle(ACETheme.danger).padding(8) }
+                                }.aceCard()
+                                .onTapGesture { onSelect(profile); dismiss() }
+                            }
+                        }
+
+                        Text("新建运动员").font(.headline).foregroundStyle(ACETheme.ink)
+                        VStack(alignment: .leading, spacing: 15) {
+                            TextField("姓名或昵称", text: $name)
+                                .padding(14).background(ACETheme.cardInk.opacity(0.05)).clipShape(RoundedRectangle(cornerRadius: 13))
+                            choiceGroup("性别", values: ["女", "男", "其他"], selection: $gender)
+                            choiceGroup("基础水平", values: ["初学", "业余进阶", "比赛训练"], selection: $level)
+                            choiceGroup("惯用手", values: ["右手", "左手"], selection: $dominantHand)
+                            TextField("训练目标（例如：提升反手稳定性）", text: $trainingGoal, axis: .vertical)
+                                .lineLimit(2...3).padding(14).background(ACETheme.cardInk.opacity(0.05)).clipShape(RoundedRectangle(cornerRadius: 13))
+                            Button("保存运动员资料", action: saveProfile).buttonStyle(PrimaryButtonStyle())
+                                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }.aceCard().foregroundStyle(ACETheme.cardInk)
+                    }.padding(18).padding(.bottom, 30)
                 }
-                Section("新建运动员") {
-                    TextField("姓名或昵称", text: $name)
-                    Picker("性别", selection: $gender) {
-                        Text("未选择").tag("")
-                        Text("女").tag("女")
-                        Text("男").tag("男")
-                        Text("其他").tag("其他")
-                    }
-                    Picker("基础", selection: $level) {
-                        Text("未选择").tag("")
-                        Text("初学").tag("初学")
-                        Text("业余进阶").tag("业余进阶")
-                        Text("比赛训练").tag("比赛训练")
-                    }
-                    Picker("惯用手", selection: $dominantHand) {
-                        Text("未选择").tag("")
-                        Text("右手").tag("右手")
-                        Text("左手").tag("左手")
-                    }
-                    TextField("训练目标（例如：提升反手稳定性）", text: $trainingGoal)
-                    Button("保存") { guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }; let cleanedGoal = String(trainingGoal.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80)); profiles.append(AthleteProfile(name: name, gender: gender, level: level, dominantHand: dominantHand.isEmpty ? nil : dominantHand, trainingGoal: cleanedGoal.isEmpty ? nil : cleanedGoal)); AthleteProfileStore.save(profiles); name = ""; gender = ""; level = ""; dominantHand = ""; trainingGoal = "" }
-                }
-            }.navigationTitle("运动员资料").toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
+            }
+            .navigationTitle("运动员资料")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.foregroundStyle(ACETheme.green) } }
         }
     }
+
+    private func choiceGroup(_ title: String, values: [String], selection: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(ACETheme.cardMuted)
+            FlowLayout(spacing: 8) {
+                ForEach(values, id: \.self) { value in
+                    Button(value) { selection.wrappedValue = selection.wrappedValue == value ? "" : value }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(selection.wrappedValue == value ? ACETheme.onPrimary : ACETheme.cardInk)
+                        .padding(.horizontal, 13).padding(.vertical, 9)
+                        .background(selection.wrappedValue == value ? ACETheme.green : ACETheme.cardInk.opacity(0.06), in: Capsule())
+                }
+            }
+        }
+    }
+    private func saveProfile() {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return }
+        let cleanedGoal = String(trainingGoal.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80))
+        let profile = AthleteProfile(name: cleaned, gender: gender, level: level, dominantHand: dominantHand.isEmpty ? nil : dominantHand, trainingGoal: cleanedGoal.isEmpty ? nil : cleanedGoal)
+        profiles.append(profile); AthleteProfileStore.save(profiles); onSelect(profile)
+        name = ""; gender = ""; level = ""; dominantHand = ""; trainingGoal = ""; dismiss()
+    }
+    private func remove(_ profile: AthleteProfile) { profiles.removeAll { $0.id == profile.id }; AthleteProfileStore.save(profiles) }
+    private func profileSummary(_ profile: AthleteProfile) -> String { [profile.gender, profile.level, profile.dominantHand ?? "", profile.trainingGoal ?? ""].filter { !$0.isEmpty }.joined(separator: " · ") }
+}
+
+private struct FlowLayout<Content: View>: View {
+    let spacing: CGFloat
+    let content: Content
+    init(spacing: CGFloat, @ViewBuilder content: () -> Content) { self.spacing = spacing; self.content = content() }
+    var body: some View { HStack(spacing: spacing) { content } }
 }

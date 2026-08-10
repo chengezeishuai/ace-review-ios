@@ -15,6 +15,7 @@ struct TaskListView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
                     header
+                    searchBar
                     taskFilters
                     if !uploads.orderedSnapshots.isEmpty {
                         ForEach(uploads.orderedSnapshots) { item in
@@ -56,11 +57,6 @@ struct TaskListView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "训练、运动员或重点关注"
-        )
         .refreshable { await taskStore.load() }
         .task {
             await taskStore.load()
@@ -76,33 +72,44 @@ struct TaskListView: View {
     }
 
     private var header: some View {
-        ACEPageHeader(
-            eyebrow: "LIBRARY",
-            title: "任务库",
-            subtitle: "上传、分析和报告状态集中在这里。"
-        ) {
-            ACEStatusPill(
-                title: "\(taskStore.tasks.count) 条",
-                color: ACETheme.green,
-                systemImage: "tray.full"
-            )
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("训练档案").font(.caption.weight(.bold)).tracking(1.2).foregroundStyle(ACETheme.green)
+                Text("任务库").font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(ACETheme.ink)
+            }
+            Spacer()
+            Text("\(taskStore.tasks.count) 个任务")
+                .font(.caption.weight(.semibold)).foregroundStyle(ACETheme.muted)
+                .padding(.horizontal, 11).padding(.vertical, 7)
+                .background(ACETheme.paper, in: Capsule())
         }
     }
 
-    private var taskFilters: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(TaskFilter.allCases) { item in
-                    Button(item.title) { filter = item }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(filter == item ? ACETheme.onPrimary : ACETheme.cardMuted)
-                        .padding(.horizontal, 16).padding(.vertical, 9)
-                        .background(filter == item ? ACETheme.green : ACETheme.paper)
-                        .clipShape(Capsule())
-                        .overlay { Capsule().stroke(filter == item ? .clear : ACETheme.line, lineWidth: 1) }
-                }
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(ACETheme.muted)
+            TextField("搜索训练、运动员或重点关注", text: $searchText)
+                .font(.subheadline).foregroundStyle(ACETheme.cardInk)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(ACETheme.cardMuted) }
             }
         }
+        .padding(.horizontal, 15).frame(height: 48)
+        .background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(ACETheme.cardLine, lineWidth: 1) }
+    }
+
+    private var taskFilters: some View {
+        HStack(spacing: 6) {
+            ForEach(TaskFilter.allCases) { item in
+                Button(item.title) { filter = item }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(filter == item ? ACETheme.onPrimary : ACETheme.cardMuted)
+                    .frame(maxWidth: .infinity).padding(.vertical, 9)
+                    .background(filter == item ? ACETheme.green : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }.padding(4).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var visibleTasks: [TaskItem] {
@@ -196,11 +203,12 @@ private struct LibraryTaskRow: View {
     let compact: Bool
     var body: some View {
         HStack(spacing: 13) {
-            ZStack(alignment: .topLeading) {
-                TennisCourtThumbnail().frame(width: compact ? 68 : 82, height: compact ? 60 : 70)
-                Image(systemName: task.isComplete ? "checkmark" : task.status == "failed" ? "exclamationmark" : "play.fill")
-                    .font(.caption.bold()).foregroundStyle(.white).padding(6).background(statusColor).clipShape(Circle()).padding(5)
-            }
+            ZStack {
+                RoundedRectangle(cornerRadius: 15, style: .continuous).fill(statusColor.opacity(0.10))
+                Image(systemName: statusIcon)
+                    .font(.system(size: compact ? 18 : 21, weight: .semibold))
+                    .foregroundStyle(statusColor)
+            }.frame(width: compact ? 46 : 52, height: compact ? 46 : 52)
             VStack(alignment: .leading, spacing: compact ? 4 : 6) {
                 HStack { Text(task.title).font(.subheadline.bold()).foregroundStyle(ACETheme.cardInk).lineLimit(1); Spacer(); statusBadge }
                 HStack(spacing: 8) {
@@ -210,17 +218,15 @@ private struct LibraryTaskRow: View {
                 if task.isActive {
                     ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green)
                     Text("\(Int(displayedProgress.rounded()))% · \(displayMessage)").font(.caption2).foregroundStyle(ACETheme.cardMuted).lineLimit(compact ? 1 : 2)
-                } else if task.isComplete {
-                    Text("报告已生成").font(.caption).foregroundStyle(ACETheme.green)
-                } else {
+                } else if !task.isComplete {
                     Text(task.failureReason).font(.caption).foregroundStyle(ACETheme.danger).lineLimit(2)
                 }
             }
+            Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(ACETheme.cardMuted.opacity(0.7))
         }
         .padding(compact ? 11 : 13)
         .background(ACETheme.paper)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(alignment: .leading) { RoundedRectangle(cornerRadius: 2).fill(statusColor).frame(width: 4).padding(.vertical, 13) }
         .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(ACETheme.cardLine, lineWidth: 1) }
     }
     private var statusColor: Color { task.isComplete ? ACETheme.green : task.status == "failed" ? ACETheme.danger : ACETheme.green }
@@ -237,6 +243,12 @@ private struct LibraryTaskRow: View {
         return localUpload.message
     }
     private var statusBadge: some View { ACEStatusPill(title: statusName, color: statusColor) }
+    private var statusIcon: String {
+        if task.isComplete { return "checkmark.circle.fill" }
+        if task.status == "failed" { return "exclamationmark.triangle.fill" }
+        if localUpload?.message.hasPrefix("排队中") == true || task.status == "queued" { return "clock.fill" }
+        return "waveform.path.ecg"
+    }
     private var statusName: String {
         if localUpload?.message.hasPrefix("排队中") == true { return "排队中" }
         switch task.status {
