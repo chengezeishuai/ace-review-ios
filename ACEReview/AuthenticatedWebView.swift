@@ -111,22 +111,22 @@ struct AuthenticatedWebView: UIViewRepresentable {
                 do {
                     let submitted = try await APIClient.shared.analyzeCut(taskID: taskID, cutID: cutID)
                     await MainActor.run { self.setButtons(path: path, text: "已提交，处理中 20%", disabled: true) }
-                    await self.waitForCompletion(taskID: submitted.id, buttonPath: path)
+                    await self.waitForCompletion(taskID: submitted.id, sourceTaskID: taskID, buttonPath: path)
                 } catch {
                     await MainActor.run { self.setButtons(path: path, text: "生成本段逐拍报告", disabled: false, alert: "逐拍分析提交失败：\(error.localizedDescription)") }
                 }
             }
         }
 
-        private func waitForCompletion(taskID: String, buttonPath: String) async {
+        private func waitForCompletion(taskID: String, sourceTaskID: String, buttonPath: String) async {
             for _ in 0..<900 {
                 try? await Task.sleep(for: .seconds(2))
                 do {
                     let task = try await APIClient.shared.task(id: taskID)
-                    if task.status == "completed", let reportPath = task.reportURL {
+                    if task.status == "completed" {
                         await MainActor.run {
-                            self.setButtons(path: buttonPath, text: "已生成，打开报告", disabled: false)
-                            self.loadAuthenticated(reportPath)
+                            self.setButtons(path: buttonPath, text: "已完成，载入结果", disabled: true)
+                            self.loadAuthenticated("/api/app/tasks/\(sourceTaskID)/report")
                         }
                         return
                     }
