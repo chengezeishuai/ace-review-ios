@@ -141,7 +141,7 @@ private final class UploadSlot: NSObject, ObservableObject {
     private static let minimumPreparationDisplay: TimeInterval = 10
     private static let progressTick: TimeInterval = 0.05
     private static let preparationMessage = "正在准备视频文件"
-    private static let uploadMessage = "文件开始上传，请稍后"
+    private static let uploadMessage = "正在上传；请尽量保持 App 前台，锁屏或切换应用时系统可能暂时暂停"
 
     private func diagnostic(_ message: String) {
         let stamp = DateFormatter.localizedString(
@@ -170,6 +170,8 @@ private final class UploadSlot: NSObject, ObservableObject {
         configuration.isDiscretionary = false
         configuration.allowsCellularAccess = true
         configuration.waitsForConnectivity = true
+        configuration.timeoutIntervalForRequest = 900
+        configuration.timeoutIntervalForResource = 24 * 60 * 60
         // Parts are generated sequentially from Photos, but uploads of ready
         // parts can overlap. A larger part avoids hundreds of request/DB
         // round-trips for 1 GB recordings while retaining resumability.
@@ -206,11 +208,10 @@ private final class UploadSlot: NSObject, ObservableObject {
         )
     }()
 
-    private var uploadSession: URLSession {
-        UIApplication.shared.applicationState == .active
-            ? foregroundSession
-            : backgroundSession
-    }
+    // Always use the background-capable session. Tasks created by a
+    // foreground-only session are suspended when the user locks the phone or
+    // switches apps and cannot be migrated after the fact.
+    private var uploadSession: URLSession { backgroundSession }
 
     init(slotIndex: Int) {
         self.slotIndex = slotIndex
