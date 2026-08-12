@@ -788,8 +788,7 @@ private final class UploadSlot: NSObject, ObservableObject {
             task.countOfBytesClientExpectsToSend = size.int64Value
         }
         task.taskDescription = "part|\(taskID)|\(index)|\(fileURL.path)"
-        let sessionName = task.session?.configuration.identifier ?? "foreground"
-        diagnostic("已创建上传任务 index=\(index), session=\(sessionName), state=\(task.state.rawValue)")
+        diagnostic("已创建上传任务 index=\(index), state=\(task.state.rawValue)")
         task.resume()
         diagnostic("已调用 resume index=\(index), state=\(task.state.rawValue)")
     }
