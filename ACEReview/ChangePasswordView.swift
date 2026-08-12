@@ -61,6 +61,7 @@ struct ChangePasswordView: View {
         }
         .navigationTitle("修改密码")
         .navigationBarTitleDisplayMode(.inline)
+        .aceKeyboardSupport()
     }
 
     private func passwordField(_ title: String, text: Binding<String>, contentType: UITextContentType) -> some View {

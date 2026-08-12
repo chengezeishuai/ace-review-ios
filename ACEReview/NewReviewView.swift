@@ -537,6 +537,7 @@ struct AthleteProfilesSheet: View {
             .navigationTitle("运动员资料")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.foregroundStyle(ACETheme.green) } }
+            .aceKeyboardSupport()
         }
     }
 

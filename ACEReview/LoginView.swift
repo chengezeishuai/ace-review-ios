@@ -72,6 +72,7 @@ struct LoginView: View {
                 .padding(.horizontal, 22)
             }
         }
+        .aceKeyboardSupport()
     }
 
     private var brand: some View {

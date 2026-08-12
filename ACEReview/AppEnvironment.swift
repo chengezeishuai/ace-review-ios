@@ -2,6 +2,30 @@ import Foundation
 import SwiftUI
 import UIKit
 
+enum ACEKeyboard {
+    static func dismiss() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+extension View {
+    /// Gives every editable screen the same keyboard accessory and interactive dismissal.
+    /// Keeping this at the shared UI layer prevents one form from silently losing the
+    /// dismiss action when another TextField is added later.
+    func aceKeyboardSupport() -> some View {
+        scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button { ACEKeyboard.dismiss() } label: {
+                        Label("收起键盘", systemImage: "keyboard.chevron.compact.down")
+                    }
+                    .accessibilityLabel("收起键盘")
+                }
+            }
+    }
+}
+
 struct ACEPalette: Identifiable, Equatable {
     let id: String
     let name: String

@@ -64,6 +64,7 @@ struct TaskListView: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .refreshable { await taskStore.load() }
+        .aceKeyboardSupport()
         .task {
             await taskStore.load()
             while !Task.isCancelled {
