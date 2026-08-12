@@ -113,6 +113,20 @@ private final class UploadSlot: NSObject, ObservableObject {
     // Photos resource reads and local part generation are serialized. Network
     // upload still uses the existing background URLSession after each part is ready.
     private static let uploadGate = DispatchSemaphore(value: 1)
+    private static let uploadGateStateLock = NSLock()
+    private static var uploadGateBusy = false
+
+    private static func markGateAcquired() {
+        uploadGateStateLock.lock()
+        uploadGateBusy = true
+        uploadGateStateLock.unlock()
+    }
+
+    private static func markGateReleased() {
+        uploadGateStateLock.lock()
+        uploadGateBusy = false
+        uploadGateStateLock.unlock()
+    }
 
     // The Photos import can take longer than the visible preparation period.
     // Keep the first 0-15% bounded, then make it clear that background upload
@@ -625,10 +639,12 @@ private final class UploadSlot: NSObject, ObservableObject {
                 self.setWaitingForUploadGate(true)
                 self.publish {
                     self.snapshot.isShowingPreparation = true
-                    self.snapshot.message = "排队中，等待前一个视频上传完成"
+                    self.snapshot.message = "排队中，等待前一个视频完成读取"
                 }
                 Self.uploadGate.wait()
             }
+            // Keep the state used by the UI in sync with the semaphore.
+            Self.markGateAcquired()
             self.lock.lock()
             self.waitingForUploadGate = false
             self.holdsUploadGate = true
@@ -654,6 +670,7 @@ private final class UploadSlot: NSObject, ObservableObject {
         }
         holdsUploadGate = false
         lock.unlock()
+        Self.markGateReleased()
         Self.uploadGate.signal()
     }
 
