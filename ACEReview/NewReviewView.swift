@@ -291,9 +291,17 @@ struct NewReviewView: View {
             }
             .navigationTitle("提交复盘")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showDetails = false } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismissKeyboard(); showDetails = false } }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button { dismissKeyboard() } label: {
+                        Label("收起键盘", systemImage: "keyboard.chevron.compact.down")
+                    }
+                    .accessibilityLabel("收起键盘")
+                }
+            }
             .scrollDismissesKeyboard(.interactively)
-            .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("收起键盘") { dismissKeyboard() } } }
             .alert("提交未完成", isPresented: Binding(get: { !uploadError.isEmpty }, set: { if !$0 { uploadError = "" } })) {
                 Button("知道了", role: .cancel) {}
             } message: {
