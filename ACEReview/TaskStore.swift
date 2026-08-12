@@ -6,6 +6,7 @@ final class TaskStore: ObservableObject {
     @Published private(set) var loadState: TaskLoadState = .idle
     @Published private(set) var retryingTaskIDs: Set<String> = []
     @Published private(set) var workingTaskIDs: Set<String> = []
+    @Published private(set) var deleteErrorMessage = ""
 
     var isLoading: Bool {
         if case .loading = loadState { return true }
@@ -81,6 +82,7 @@ final class TaskStore: ObservableObject {
     @discardableResult
     func delete(_ task: TaskItem) async -> Bool {
         guard !workingTaskIDs.contains(task.id) else { return false }
+        deleteErrorMessage = ""
         workingTaskIDs.insert(task.id)
         defer { workingTaskIDs.remove(task.id) }
         let oldIndex = tasks.firstIndex { $0.id == task.id }
@@ -93,6 +95,7 @@ final class TaskStore: ObservableObject {
                 tasks.insert(task, at: min(oldIndex, tasks.count))
             }
             loadState = .failed(error.localizedDescription)
+            deleteErrorMessage = error.localizedDescription
             return false
         }
     }

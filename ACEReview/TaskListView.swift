@@ -42,24 +42,15 @@ struct TaskListView: View {
                     } else {
                         LazyVStack(spacing: 10) {
                             ForEach(visibleTasks) { task in
-                                HStack(spacing: 8) {
-                                    Button { selectedTask = task } label: {
-                                        LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id), compact: compactLibrary)
+                                Button { selectedTask = task } label: {
+                                    LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id), compact: compactLibrary)
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    if task.status == "failed" {
+                                        Button("重新分析") { Task { await taskStore.retry(task) } }
                                     }
-                                    .buttonStyle(.plain)
-                                    .frame(maxWidth: .infinity)
-                                    Menu {
-                                        if task.status == "failed" {
-                                            Button("重新分析") { Task { await taskStore.retry(task) } }
-                                        }
-                                        Button("删除任务", role: .destructive) { pendingDelete = task }
-                                    } label: {
-                                        Image(systemName: "ellipsis")
-                                            .font(.system(size: 15, weight: .bold))
-                                            .foregroundStyle(ACETheme.cardMuted)
-                                            .frame(width: 34, height: 42)
-                                    }
-                                    .disabled(deletingTaskIDs.contains(task.id))
+                                    Button("删除任务", role: .destructive) { pendingDelete = task }
                                 }
                                 .transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.96).combined(with: .opacity)))
                             }
@@ -96,6 +87,10 @@ struct TaskListView: View {
                         deleteToast = "已删除“\(task.title)”"
                         try? await Task.sleep(for: .seconds(2.2))
                         deleteToast = ""
+                    } else {
+                        deleteToast = taskStore.deleteErrorMessage.isEmpty ? "删除未完成，请重试" : taskStore.deleteErrorMessage
+                        try? await Task.sleep(for: .seconds(3))
+                        deleteToast = ""
                     }
                 }
             }
@@ -108,7 +103,7 @@ struct TaskListView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(ACETheme.onPrimary)
                     .padding(.horizontal, 18).padding(.vertical, 13)
-                    .background(ACETheme.green, in: Capsule())
+                    .background(deleteToast.hasPrefix("已删除") ? ACETheme.green : ACETheme.danger, in: Capsule())
                     .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
                     .padding(.bottom, 18)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -557,6 +552,7 @@ private struct DeleteTaskSheet: View {
         }
         .padding(22)
         .background(ACETheme.cream)
+        .presentationBackground(ACETheme.cream)
     }
 }
 
