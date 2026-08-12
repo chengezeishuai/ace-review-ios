@@ -112,6 +112,8 @@ private final class UploadSlot: NSObject, ObservableObject {
     // jump backwards (for example 2% -> 1%). Track every in-flight part.
     private var inFlightBytes: [Int: Int64] = [:]
     private var maxReportedBytes: Int64 = 0
+    private var progressSampleBytes: Int64 = 0
+    private var progressSampleTime = Date()
     private var waitingForUploadGate = false
     private var holdsUploadGate = false
 
@@ -1027,6 +1029,19 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
         }
         let aggregateBytes = min(totalBytes, completedBytes + inFlightTotal)
         maxReportedBytes = max(maxReportedBytes, aggregateBytes)
+        let now = Date()
+        let elapsed = now.timeIntervalSince(progressSampleTime)
+        if elapsed >= 0.5 {
+            let delta = max(0, maxReportedBytes - progressSampleBytes)
+            let speed = Double(delta) / elapsed
+            progressSampleBytes = maxReportedBytes
+            progressSampleTime = now
+            let remaining = speed > 0 ? Int(Double(max(0, totalBytes - maxReportedBytes)) / speed) : nil
+            publish {
+                self.snapshot.uploadSpeedBytesPerSecond = speed
+                self.snapshot.estimatedSecondsRemaining = remaining
+            }
+        }
         lock.unlock()
         publish {
             self.snapshot.phase = .uploading

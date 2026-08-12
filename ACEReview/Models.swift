@@ -350,6 +350,8 @@ struct UploadSnapshot {
     var bytesRead: Int64 = 0
     var bytesUploaded: Int64 = 0
     var totalBytes: Int64 = 0
+    var uploadSpeedBytesPerSecond: Double = 0
+    var estimatedSecondsRemaining: Int? = nil
     var preparationPercent: Int = 0
     var isShowingPreparation = false
     var message = ""
