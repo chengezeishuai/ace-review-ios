@@ -428,9 +428,12 @@ private final class UploadSlot: NSObject, ObservableObject {
                         self.snapshot.preparationPercent,
                         Self.preparationPercent(since: startedAt)
                     )
+                    // Never infer that uploading has started from elapsed time.
+                    // Photos/iCloud may still be reading the original resource
+                    // after ten seconds. The state changes to uploading only
+                    // when the first local part has actually been generated.
                     if elapsed >= Self.minimumPreparationDisplay {
-                        self.snapshot.isShowingPreparation = false
-                        self.snapshot.message = Self.uploadMessage
+                        self.snapshot.message = "正在准备视频资源，请保持 App 打开"
                     }
                 }
                 if !self.snapshot.isShowingPreparation {
@@ -660,6 +663,11 @@ private final class UploadSlot: NSObject, ObservableObject {
         let uploadToken = manifest?.uploadToken
         lock.unlock()
         guard let uploadToken else { return }
+        publish {
+            self.snapshot.phase = .uploading
+            self.snapshot.isShowingPreparation = false
+            self.snapshot.message = "正在上传视频分片"
+        }
         schedulePart(taskID: taskID, uploadToken: uploadToken, index: index, fileURL: fileURL)
     }
 
