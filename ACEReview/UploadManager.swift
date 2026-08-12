@@ -527,15 +527,23 @@ private final class UploadSlot: NSObject, ObservableObject {
         options.progressHandler = { [weak self] progress in
             self?.publish {
                 guard let self else { return }
-                _ = progress
+                // Photos reports the real resource-download progress. The old
+                // code discarded it and displayed a time-based 1%, which made
+                // an iCloud original look frozen for minutes.
+                let resourcePercent = Int((progress * 100).rounded())
                 let startedAt = self.preparationStartedAt ?? Date()
+                let elapsedPercent = Self.preparationPercent(since: startedAt)
                 self.snapshot.preparationPercent = max(
                     self.snapshot.preparationPercent,
-                    Self.preparationPercent(since: startedAt)
+                    min(95, max(resourcePercent, elapsedPercent))
                 )
-                self.snapshot.message = self.snapshot.isShowingPreparation
-                    ? Self.preparationMessage
-                    : Self.uploadMessage
+                if self.snapshot.isShowingPreparation {
+                    self.snapshot.message = resourcePercent < 1
+                        ? "正在从照片读取原视频（可能需要从 iCloud 下载）"
+                        : "正在读取原视频 (resourcePercent)%"
+                } else {
+                    self.snapshot.message = Self.uploadMessage
+                }
             }
         }
         var readFailure: Error?
