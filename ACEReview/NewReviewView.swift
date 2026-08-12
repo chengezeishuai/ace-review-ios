@@ -1,6 +1,5 @@
 import Photos
 import SwiftUI
-import UIKit
 
 struct NewReviewView: View {
     @EnvironmentObject private var uploads: UploadManager
@@ -289,7 +288,6 @@ struct NewReviewView: View {
                     }
                     .padding(18).padding(.bottom, 24)
                 }
-                .overlay { KeyboardDismissalOverlay { dismissKeyboard() } }
             }
             .navigationTitle("提交复盘")
             .navigationBarTitleDisplayMode(.inline)
@@ -527,7 +525,6 @@ struct AthleteProfilesSheet: View {
                         }.aceCard().foregroundStyle(ACETheme.cardInk)
                     }.padding(18).padding(.bottom, 30)
                 }
-                .overlay { KeyboardDismissalOverlay { dismiss() } }
             }
             .navigationTitle("运动员资料")
             .navigationBarTitleDisplayMode(.inline)
@@ -561,41 +558,6 @@ struct AthleteProfilesSheet: View {
     private func profileSummary(_ profile: AthleteProfile) -> String { [profile.gender, profile.level, profile.dominantHand ?? "", profile.trainingGoal ?? ""].filter { !$0.isEmpty }.joined(separator: " · ") }
 }
 
-/// Dismisses the keyboard when tapping empty sheet space without stealing
-/// touches from text fields, buttons, or the scroll view itself.
-private struct KeyboardDismissalOverlay: UIViewRepresentable {
-    let action: () -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
-
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView(frame: .zero)
-        view.backgroundColor = .clear
-        let recognizer = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
-        recognizer.cancelsTouchesInView = false
-        recognizer.delegate = context.coordinator
-        view.addGestureRecognizer(recognizer)
-        return view
-    }
-
-    func updateUIView(_ uiView: UIView, context: Context) {}
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        let action: () -> Void
-        init(action: @escaping () -> Void) { self.action = action }
-
-        @objc func handleTap(_ recognizer: UITapGestureRecognizer) { action() }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-            var view = touch.view
-            while let current = view {
-                if current is UIControl || current is UITextView { return false }
-                view = current.superview
-            }
-            return true
-        }
-    }
-}
 
 private struct FlowLayout<Content: View>: View {
     let spacing: CGFloat
