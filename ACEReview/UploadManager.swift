@@ -111,11 +111,18 @@ private final class UploadSlot: NSObject, ObservableObject {
     // latest callback. Keeping only that part's value made the aggregate UI
     // jump backwards (for example 2% -> 1%). Track every in-flight part.
     private var inFlightBytes: [Int: Int64] = [:]
+    // A background URLSession task can be dropped by iOS or by a transient
+    // network/Nginx timeout. Keep the part resumable instead of failing the
+    // entire video upload, and avoid scheduling the same part twice.
+    private var activePartIndices: Set<Int> = []
+    private var partRetryCounts: [Int: Int] = [:]
+    private static let maximumPartRetries = 6
     private var maxReportedBytes: Int64 = 0
     private var progressSampleBytes: Int64 = 0
     private var progressSampleTime = Date()
     private var waitingForUploadGate = false
     private var holdsUploadGate = false
+    private var lifecycleObserver: NSObjectProtocol?
 
     // Photos resource reads and local part generation are serialized. Network
     // upload still uses the existing background URLSession after each part is ready.
@@ -221,6 +228,16 @@ private final class UploadSlot: NSObject, ObservableObject {
         default: "com.ace.review.background-upload.\(slotIndex)"
         }
         super.init()
+        lifecycleObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Reconcile URLSession tasks whenever the app returns to the
+            // foreground. This recovers parts whose background task was
+            // interrupted while the user switched apps or locked the phone.
+            self?.restoreBackgroundTasks()
+        }
         manifest = loadManifest()
         if let manifest {
             let restoredUploadedBytes: Int64
@@ -267,6 +284,12 @@ private final class UploadSlot: NSObject, ObservableObject {
             reconcileServerState(for: manifest)
         }
         restoreBackgroundTasks()
+    }
+
+    deinit {
+        if let lifecycleObserver {
+            NotificationCenter.default.removeObserver(lifecycleObserver)
+        }
     }
 
     func begin(
@@ -775,6 +798,21 @@ private final class UploadSlot: NSObject, ObservableObject {
     }
 
     private func schedulePart(taskID: String, uploadToken: String, index: Int, fileURL: URL) {
+        lock.lock()
+        let alreadyCompleted = manifest?.completedParts.contains(index) == true
+        let alreadyActive = activePartIndices.contains(index)
+        if !alreadyCompleted && !alreadyActive {
+            activePartIndices.insert(index)
+        }
+        lock.unlock()
+        guard !alreadyCompleted, !alreadyActive else { return }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            lock.lock()
+            activePartIndices.remove(index)
+            lock.unlock()
+            diagnostic("分片文件不存在，无法上传 index=\(index)")
+            return
+        }
         var request = URLRequest(
             url: APIClient.shared.url(
                 for: "api/app/uploads/\(taskID)/parts/\(index)"
@@ -1077,6 +1115,35 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
               (200..<300).contains(status),
               envelope?.code == 200 else {
             lock.lock()
+            if kind == "part", let index = Int(fields[2]) {
+                activePartIndices.remove(index)
+                inFlightBytes.removeValue(forKey: index)
+                let attempt = (partRetryCounts[index] ?? 0) + 1
+                partRetryCounts[index] = attempt
+                let retryable = attempt <= Self.maximumPartRetries
+                persistManifestUnlocked()
+                lock.unlock()
+                if retryable {
+                    let delay = min(30.0, pow(2.0, Double(attempt - 1)))
+                    diagnostic("分片上传暂时中断 index=\(index)，第\(attempt)次重试，\(Int(delay))秒后继续")
+                    publish {
+                        self.snapshot.phase = .uploading
+                        self.snapshot.message = "网络波动，正在自动续传（分片 \(index + 1)）"
+                    }
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) { [weak self] in
+                        guard let self else { return }
+                        self.lock.lock()
+                        let manifest = self.manifest
+                        let completed = manifest?.completedParts.contains(index) == true
+                        self.lock.unlock()
+                        guard let manifest, !completed else { return }
+                        let file = self.directoryForExistingTask(manifest.taskID)
+                            .appendingPathComponent(String(format: "%08d.part", index))
+                        self.schedulePart(taskID: manifest.taskID, uploadToken: manifest.uploadToken, index: index, fileURL: file)
+                    }
+                    return
+                }
+            }
             manifest?.finalizeScheduled = false
             persistManifestUnlocked()
             lock.unlock()
@@ -1089,6 +1156,8 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
         if kind == "part", let index = Int(fields[2]) {
             try? FileManager.default.removeItem(atPath: fields[3])
             lock.lock()
+            activePartIndices.remove(index)
+            partRetryCounts.removeValue(forKey: index)
             inFlightBytes.removeValue(forKey: index)
             manifest?.completedParts.insert(index)
             let completed = manifest?.completedParts.count ?? 0
