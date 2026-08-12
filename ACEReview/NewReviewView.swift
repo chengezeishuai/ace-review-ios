@@ -1,5 +1,6 @@
 import Photos
 import SwiftUI
+import UIKit
 
 struct NewReviewView: View {
     @EnvironmentObject private var uploads: UploadManager
@@ -256,7 +257,10 @@ struct NewReviewView: View {
                                                 Text(player.isEmpty ? "可跳过，仍可进行通用分析" : athleteSummary).font(.caption).foregroundStyle(ACETheme.cardMuted).lineLimit(2)
                                             }
                                             Spacer(); Image(systemName: "chevron.up.chevron.down").font(.caption.bold()).foregroundStyle(ACETheme.green)
-                                        }.padding(15)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(Rectangle())
+                                        .padding(15)
                                     }.buttonStyle(.plain)
                                     Divider().overlay(ACETheme.cardLine).padding(.leading, 66)
                                     Button { dismissKeyboard(); DispatchQueue.main.async { showAthleteProfiles = true } } label: {
@@ -285,6 +289,7 @@ struct NewReviewView: View {
                     }
                     .padding(18).padding(.bottom, 24)
                 }
+                .overlay { KeyboardDismissalOverlay { dismissKeyboard() } }
             }
             .navigationTitle("提交复盘")
             .navigationBarTitleDisplayMode(.inline)
@@ -459,6 +464,8 @@ struct AthleteChooserSheet: View {
                     .font(.title3).foregroundStyle(isSelected ? ACETheme.onPrimary : ACETheme.cardMuted)
             }
             .foregroundStyle(isSelected ? ACETheme.onPrimary : ACETheme.cardInk)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
             .padding(15)
             .background(isSelected ? ACETheme.green : ACETheme.paper)
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -520,6 +527,7 @@ struct AthleteProfilesSheet: View {
                         }.aceCard().foregroundStyle(ACETheme.cardInk)
                     }.padding(18).padding(.bottom, 30)
                 }
+                .overlay { KeyboardDismissalOverlay { dismiss() } }
             }
             .navigationTitle("运动员资料")
             .navigationBarTitleDisplayMode(.inline)
@@ -551,6 +559,42 @@ struct AthleteProfilesSheet: View {
     }
     private func remove(_ profile: AthleteProfile) { profiles.removeAll { $0.id == profile.id }; AthleteProfileStore.save(profiles) }
     private func profileSummary(_ profile: AthleteProfile) -> String { [profile.gender, profile.level, profile.dominantHand ?? "", profile.trainingGoal ?? ""].filter { !$0.isEmpty }.joined(separator: " · ") }
+}
+
+/// Dismisses the keyboard when tapping empty sheet space without stealing
+/// touches from text fields, buttons, or the scroll view itself.
+private struct KeyboardDismissalOverlay: UIViewRepresentable {
+    let action: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(action: action) }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.backgroundColor = .clear
+        let recognizer = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
+        recognizer.cancelsTouchesInView = false
+        recognizer.delegate = context.coordinator
+        view.addGestureRecognizer(recognizer)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {}
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        let action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+
+        @objc func handleTap(_ recognizer: UITapGestureRecognizer) { action() }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            var view = touch.view
+            while let current = view {
+                if current is UIControl || current is UITextView { return false }
+                view = current.superview
+            }
+            return true
+        }
+    }
 }
 
 private struct FlowLayout<Content: View>: View {
