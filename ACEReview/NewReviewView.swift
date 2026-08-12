@@ -290,7 +290,7 @@ struct NewReviewView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { showDetails = false } } }
             .scrollDismissesKeyboard(.interactively)
-            .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("收起键盘") { focusedField = nil } } }
+            .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("收起键盘") { dismissKeyboard() } } }
             .alert("提交未完成", isPresented: Binding(get: { !uploadError.isEmpty }, set: { if !$0 { uploadError = "" } })) {
                 Button("知道了", role: .cancel) {}
             } message: {

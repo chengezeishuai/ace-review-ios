@@ -137,7 +137,10 @@ private final class UploadSlot: NSObject, ObservableObject {
         configuration.isDiscretionary = false
         configuration.allowsCellularAccess = true
         configuration.waitsForConnectivity = true
-        configuration.httpMaximumConnectionsPerHost = 4
+        // Parts are generated sequentially from Photos, but uploads of ready
+        // parts can overlap. A larger part avoids hundreds of request/DB
+        // round-trips for 1 GB recordings while retaining resumability.
+        configuration.httpMaximumConnectionsPerHost = 6
         let session = URLSession(
             configuration: configuration,
             delegate: self,
