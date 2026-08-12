@@ -6,6 +6,7 @@ struct TaskListView: View {
     @EnvironmentObject private var uploads: UploadManager
     @State private var filter = TaskFilter.all
     @State private var selectedTask: TaskItem?
+    @State private var pendingDelete: TaskItem?
     @State private var searchText = ""
     @AppStorage("ace.settings.compactLibrary") private var compactLibrary = false
 
@@ -43,9 +44,14 @@ struct TaskListView: View {
                                     LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id), compact: compactLibrary)
                                 }
                                     .buttonStyle(.plain)
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                        Button(role: .destructive) { pendingDelete = task } label: {
+                                            Label("删除", systemImage: "trash")
+                                        }
+                                    }
                                     .contextMenu {
                                         if task.status == "failed" { Button("重新分析") { Task { await taskStore.retry(task) } } }
-                                        Button("删除记录", role: .destructive) { Task { await taskStore.delete(task) } }
+                                        Button("删除记录", role: .destructive) { pendingDelete = task }
                                     }
                             }
                         }
@@ -68,6 +74,18 @@ struct TaskListView: View {
         .navigationDestination(item: $selectedTask) { task in
             if task.isComplete { ReviewReportView(task: task) }
             else { TaskProgressView(task: task, store: taskStore) }
+        }
+        .alert("删除任务？", isPresented: Binding(
+            get: { pendingDelete != nil },
+            set: { if !$0 { pendingDelete = nil } }
+        ), presenting: pendingDelete) { task in
+            Button("删除", role: .destructive) {
+                Task { await taskStore.delete(task) }
+                pendingDelete = nil
+            }
+            Button("取消", role: .cancel) { pendingDelete = nil }
+        } message: { task in
+            Text("将删除“\(task.title)”及其上传视频、分析结果和报告，此操作不可撤销。")
         }
     }
 
