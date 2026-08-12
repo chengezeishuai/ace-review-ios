@@ -107,6 +107,11 @@ private final class UploadSlot: NSObject, ObservableObject {
     private var preparationTimer: Timer?
     private var preparationStartedAt: Date?
     private var responseBodies: [Int: Data] = [:]
+    // URLSession reports progress for whichever parallel part emitted the
+    // latest callback. Keeping only that part's value made the aggregate UI
+    // jump backwards (for example 2% -> 1%). Track every in-flight part.
+    private var inFlightBytes: [Int: Int64] = [:]
+    private var maxReportedBytes: Int64 = 0
     private var waitingForUploadGate = false
     private var holdsUploadGate = false
 
@@ -340,6 +345,8 @@ private final class UploadSlot: NSObject, ObservableObject {
                 self.publish {
                     self.lock.lock()
                     self.manifest = newManifest
+                    self.inFlightBytes.removeAll()
+                    self.maxReportedBytes = 0
                     self.persistManifestUnlocked()
                     self.lock.unlock()
                     self.activeTaskID = response.task.id
@@ -1012,6 +1019,14 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
             let start = Int64(completedIndex * partSize)
             return partial + min(Int64(partSize), max(0, totalBytes - start))
         }
+        let currentPartStart = Int64(index * partSize)
+        let currentPartCapacity = min(Int64(partSize), max(0, totalBytes - currentPartStart))
+        inFlightBytes[index] = min(totalBytesSent, currentPartCapacity)
+        let inFlightTotal = inFlightBytes.reduce(Int64(0)) { partial, item in
+            completedParts.contains(item.key) ? partial : partial + item.value
+        }
+        let aggregateBytes = min(totalBytes, completedBytes + inFlightTotal)
+        maxReportedBytes = max(maxReportedBytes, aggregateBytes)
         lock.unlock()
         publish {
             self.snapshot.phase = .uploading
@@ -1019,13 +1034,7 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
                 ? Self.preparationMessage
                 : Self.uploadMessage
             guard totalBytes > 0 else { return }
-            let currentPartStart = Int64(index * partSize)
-            let currentPartCapacity = min(
-                Int64(partSize),
-                max(0, totalBytes - currentPartStart)
-            )
-            let transmitted = min(totalBytesSent, currentPartCapacity)
-            self.snapshot.bytesUploaded = min(totalBytes, completedBytes + transmitted)
+            self.snapshot.bytesUploaded = self.maxReportedBytes
         }
     }
 
@@ -1064,6 +1073,7 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
         if kind == "part", let index = Int(fields[2]) {
             try? FileManager.default.removeItem(atPath: fields[3])
             lock.lock()
+            inFlightBytes.removeValue(forKey: index)
             manifest?.completedParts.insert(index)
             let completed = manifest?.completedParts.count ?? 0
             let total = manifest?.totalParts ?? 0
