@@ -8,7 +8,7 @@ ACE Review is a SwiftUI client for cloud video review and device-evidence review
 - Scheme: `ACE Review`
 - Bundle identifier: `com.ace.review`
 - Deployment target: iOS 17
-- Debug API: `http://36.140.125.194:19080/prod-api/`
+- Debug API: `https://www.ah1n.com/prod-api/`
 - Release API: supplied as the HTTPS `ACE_API_BASE_URL` build setting. A dedicated ACE domain and certificate are required; the checked-in Release value is intentionally rejected by the app until replaced.
 - Release does not allow arbitrary clear-text transport. Debug retains HTTP access only for the current private acceptance environment.
 
