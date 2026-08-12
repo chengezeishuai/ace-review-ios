@@ -192,6 +192,30 @@ struct TaskListView: View {
                 processTag("上传视频", complete: snapshot.phase == .finalizing || snapshot.phase == .completed)
                 processTag("云端分析", complete: snapshot.phase == .completed)
             }
+            if !snapshot.diagnostics.isEmpty {
+                Button {
+                    if expandedUploadDiagnostics.contains(id) { expandedUploadDiagnostics.remove(id) }
+                    else { expandedUploadDiagnostics.insert(id) }
+                } label: {
+                    Label(expandedUploadDiagnostics.contains(id) ? "收起上传日志" : "查看上传日志",
+                          systemImage: expandedUploadDiagnostics.contains(id) ? "chevron.up" : "ladybug")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ACETheme.green)
+                }
+                .buttonStyle(.plain)
+            }
+            if expandedUploadDiagnostics.contains(id) {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(snapshot.diagnostics.joined(separator: "\n"))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(ACETheme.cardInk)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: 180)
+                .padding(9)
+                .background(Color.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+            }
         }
         .padding(16)
         .background(ACETheme.green.opacity(0.07))
@@ -263,35 +287,6 @@ private struct LibraryTaskRow: View {
                 } else if !task.isComplete {
                     Text(task.failureReason).font(.caption).foregroundStyle(ACETheme.danger).lineLimit(2)
                 }
-            }
-            if !snapshot.diagnostics.isEmpty {
-                Button {
-                    if expandedUploadDiagnostics.contains(id) {
-                        expandedUploadDiagnostics.remove(id)
-                    } else {
-                        expandedUploadDiagnostics.insert(id)
-                    }
-                } label: {
-                    Label(
-                        expandedUploadDiagnostics.contains(id) ? "收起上传日志" : "查看上传日志",
-                        systemImage: expandedUploadDiagnostics.contains(id) ? "chevron.up" : "ladybug"
-                    )
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ACETheme.green)
-                }
-                .buttonStyle(.plain)
-            }
-            if expandedUploadDiagnostics.contains(id) {
-                ScrollView(.vertical, showsIndicators: true) {
-                    Text(snapshot.diagnostics.joined(separator: "\n"))
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(ACETheme.cardInk)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                }
-                .frame(maxHeight: 180)
-                .padding(9)
-                .background(Color.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
             }
             Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(ACETheme.cardMuted.opacity(0.7))
         }
