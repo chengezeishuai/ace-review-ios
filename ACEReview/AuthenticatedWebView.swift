@@ -51,6 +51,13 @@ struct AuthenticatedWebView: UIViewRepresentable {
         let baseURL = AppSettings.shared.baseURL
         let target = APIClient.shared.url(for: path)
         var request = URLRequest(url: target)
+        if path.contains("/report") && !path.contains("/report/pdf") {
+            var components = URLComponents(url: target, resolvingAgainstBaseURL: false)
+            var items = components?.queryItems ?? []
+            items.append(URLQueryItem(name: "ace_report_refresh", value: String(Int(Date().timeIntervalSince1970))))
+            components?.queryItems = items
+            if let url = components?.url { request.url = url }
+        }
         request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
         if let token = KeychainStore.get("accessToken") {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -151,6 +158,13 @@ struct AuthenticatedWebView: UIViewRepresentable {
         private func loadAuthenticated(_ path: String) {
             let target = APIClient.shared.url(for: path)
             var request = URLRequest(url: target)
+            if path.contains("/report") && !path.contains("/report/pdf") {
+                var components = URLComponents(url: target, resolvingAgainstBaseURL: false)
+                var items = components?.queryItems ?? []
+                items.append(URLQueryItem(name: "ace_report_refresh", value: String(Int(Date().timeIntervalSince1970))))
+                components?.queryItems = items
+                if let url = components?.url { request.url = url }
+            }
             request.setValue(AppSettings.shared.clientID, forHTTPHeaderField: "clientid")
             if let token = KeychainStore.get("accessToken") {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
