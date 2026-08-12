@@ -6,8 +6,12 @@ struct TaskListView: View {
     @EnvironmentObject private var uploads: UploadManager
     @State private var filter = TaskFilter.all
     @State private var selectedTask: TaskItem?
+    @State private var pendingDelete: TaskItem?
+    @State private var deletingTaskIDs: Set<String> = []
+    @State private var deleteToast = ""
     @State private var searchText = ""
-    @FocusState private var isSearchFocused: Bool
+    @AppStorage("ace.settings.compactLibrary") private var compactLibrary = false
+    @State private var expandedUploadDiagnostics = Set<String>()
 
     var body: some View {
         ZStack {
@@ -15,10 +19,12 @@ struct TaskListView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 14) {
                     header
-                    searchField
+                    searchBar
                     taskFilters
-                    if let snapshot = uploads.snapshots.values.first, snapshot.phase != .idle {
-                        liveUploadCard(snapshot)
+                    if !uploads.orderedSnapshots.isEmpty {
+                        ForEach(uploads.orderedSnapshots) { item in
+                            liveUploadCard(item.id, item.snapshot)
+                        }
                     }
                     if !taskStore.errorMessage.isEmpty {
                         Label(taskStore.errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -38,13 +44,16 @@ struct TaskListView: View {
                         LazyVStack(spacing: 10) {
                             ForEach(visibleTasks) { task in
                                 Button { selectedTask = task } label: {
-                                    LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id))
+                                    LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id), compact: compactLibrary)
                                 }
-                                    .buttonStyle(.plain)
-                                    .contextMenu {
-                                        if task.status == "failed" { Button("重新分析") { Task { await taskStore.retry(task) } } }
-                                        Button("删除记录", role: .destructive) { Task { await taskStore.delete(task) } }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    if task.status == "failed" {
+                                        Button("重新分析") { Task { await taskStore.retry(task) } }
                                     }
+                                    Button("删除任务", role: .destructive) { pendingDelete = task }
+                                }
+                                .transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.96).combined(with: .opacity)))
                             }
                         }
                     }
@@ -54,9 +63,9 @@ struct TaskListView: View {
                 .padding(.bottom, 30)
             }
             .scrollDismissesKeyboard(.interactively)
-            .simultaneousGesture(TapGesture().onEnded { isSearchFocused = false })
         }
         .refreshable { await taskStore.load() }
+        .aceKeyboardSupport()
         .task {
             await taskStore.load()
             while !Task.isCancelled {
@@ -68,68 +77,81 @@ struct TaskListView: View {
             if task.isComplete { ReviewReportView(task: task) }
             else { TaskProgressView(task: task, store: taskStore) }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button { isSearchFocused = false } label: {
-                    Image(systemName: "keyboard.chevron.compact.down")
+        .sheet(item: $pendingDelete) { task in
+            DeleteTaskSheet(task: task) {
+                pendingDelete = nil
+                deletingTaskIDs.insert(task.id)
+                Task {
+                    let success = await taskStore.delete(task)
+                    withAnimation(.easeOut(duration: 0.25)) { deletingTaskIDs.remove(task.id) }
+                    if success {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) { }
+                        deleteToast = "已删除“\(task.title)”"
+                        try? await Task.sleep(for: .seconds(2.2))
+                        deleteToast = ""
+                    } else {
+                        deleteToast = taskStore.deleteErrorMessage.isEmpty ? "删除未完成，请重试" : taskStore.deleteErrorMessage
+                        try? await Task.sleep(for: .seconds(3))
+                        deleteToast = ""
+                    }
                 }
-                .accessibilityLabel("收起键盘")
+            }
+            .presentationDetents([.height(290)])
+            .presentationDragIndicator(.visible)
+        }
+        .overlay(alignment: .bottom) {
+            if !deleteToast.isEmpty {
+                Label(deleteToast, systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(ACETheme.onPrimary)
+                    .padding(.horizontal, 18).padding(.vertical, 13)
+                    .background(deleteToast.hasPrefix("已删除") ? ACETheme.green : ACETheme.danger, in: Capsule())
+                    .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
+                    .padding(.bottom, 18)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
     }
 
     private var header: some View {
-        HStack {
-            Spacer()
-            HStack(spacing: 8) {
-                ACEBrandMark(size: 29)
-                Text("ACE Review").font(.system(size: 17, weight: .semibold, design: .serif)).foregroundStyle(ACETheme.green)
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("训练档案").font(.caption.weight(.bold)).tracking(1.2).foregroundStyle(ACETheme.green)
+                Text("任务库").font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(ACETheme.ink)
             }
             Spacer()
-            Image(systemName: "magnifyingglass").foregroundStyle(ACETheme.ink)
+            Text("\(taskStore.tasks.count) 个任务")
+                .font(.caption.weight(.semibold)).foregroundStyle(ACETheme.muted)
+                .padding(.horizontal, 11).padding(.vertical, 7)
+                .background(ACETheme.paper, in: Capsule())
         }
-        .overlay(alignment: .bottomLeading) {
-            Text("任务库")
-                .font(.system(size: 31, weight: .bold, design: .rounded))
-                .foregroundStyle(ACETheme.ink)
-                .offset(y: 46)
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass").foregroundStyle(ACETheme.muted)
+            TextField("搜索训练、运动员或重点关注", text: $searchText)
+                .font(.subheadline).foregroundStyle(ACETheme.cardInk)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(ACETheme.cardMuted) }
+            }
         }
-        .padding(.bottom, 46)
+        .padding(.horizontal, 15).frame(height: 48)
+        .background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(ACETheme.cardLine, lineWidth: 1) }
     }
 
     private var taskFilters: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             ForEach(TaskFilter.allCases) { item in
-                Button(item.title) { isSearchFocused = false; filter = item }
+                Button(item.title) { filter = item }
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(filter == item ? .white : ACETheme.ink)
-                    .padding(.horizontal, 15).padding(.vertical, 8)
-                    .background(filter == item ? ACETheme.green : ACETheme.paper)
-                    .clipShape(Capsule())
-                    .overlay { Capsule().stroke(filter == item ? .clear : ACETheme.line, lineWidth: 1) }
+                    .foregroundStyle(filter == item ? ACETheme.onPrimary : ACETheme.cardMuted)
+                    .frame(maxWidth: .infinity).padding(.vertical, 9)
+                    .background(filter == item ? ACETheme.green : Color.clear)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
-        }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 9) {
-            Image(systemName: "magnifyingglass").foregroundStyle(ACETheme.muted)
-            TextField("训练、运动员、时间或重点关注", text: $searchText)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
-                .focused($isSearchFocused)
-                .submitLabel(.done)
-                .onSubmit { isSearchFocused = false }
-            if !searchText.isEmpty {
-                Button { searchText = ""; isSearchFocused = false } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(ACETheme.muted)
-                }
-            }
-        }
-        .padding(.horizontal, 13).padding(.vertical, 10)
-        .background(ACETheme.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 12).stroke(ACETheme.line, lineWidth: 1) }
+        }.padding(4).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var visibleTasks: [TaskItem] {
@@ -146,7 +168,7 @@ struct TaskListView: View {
         }
     }
 
-    private func liveUploadCard(_ snapshot: UploadSnapshot) -> some View {
+    private func liveUploadCard(_ id: String, _ snapshot: UploadSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack {
                 Label(uploadHeadline(snapshot), systemImage: "arrow.triangle.2.circlepath")
@@ -157,12 +179,42 @@ struct TaskListView: View {
                     .font(.caption.bold())
                     .foregroundStyle(ACETheme.green)
             }
+            if !snapshot.filename.isEmpty {
+                Text(snapshot.filename)
+                    .font(.caption2)
+                    .foregroundStyle(ACETheme.muted)
+                    .lineLimit(1)
+            }
             ProgressView(value: uploadProgress(snapshot), total: 100).tint(ACETheme.green)
             Text(snapshot.message).font(.caption).foregroundStyle(ACETheme.muted)
             HStack(spacing: 7) {
                 processTag("准备资源", complete: snapshot.phase != .reading)
                 processTag("上传视频", complete: snapshot.phase == .finalizing || snapshot.phase == .completed)
                 processTag("云端分析", complete: snapshot.phase == .completed)
+            }
+            if !snapshot.diagnostics.isEmpty {
+                Button {
+                    if expandedUploadDiagnostics.contains(id) { expandedUploadDiagnostics.remove(id) }
+                    else { expandedUploadDiagnostics.insert(id) }
+                } label: {
+                    Label(expandedUploadDiagnostics.contains(id) ? "收起上传日志" : "查看上传日志",
+                          systemImage: expandedUploadDiagnostics.contains(id) ? "chevron.up" : "ladybug")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ACETheme.green)
+                }
+                .buttonStyle(.plain)
+            }
+            if expandedUploadDiagnostics.contains(id) {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(snapshot.diagnostics.joined(separator: "\n"))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(ACETheme.cardInk)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: 180)
+                .padding(9)
+                .background(Color.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
             }
         }
         .padding(16)
@@ -194,6 +246,7 @@ struct TaskListView: View {
             .font(.caption2)
             .foregroundStyle(complete ? ACETheme.green : ACETheme.muted)
     }
+
 }
 
 private enum TaskFilter: String, CaseIterable, Identifiable {
@@ -213,35 +266,36 @@ private enum TaskFilter: String, CaseIterable, Identifiable {
 private struct LibraryTaskRow: View {
     let task: TaskItem
     let localUpload: UploadSnapshot?
+    let compact: Bool
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack(alignment: .topLeading) {
-                TennisCourtThumbnail().frame(width: 108, height: 67)
-                Image(systemName: task.isComplete ? "checkmark" : task.status == "failed" ? "exclamationmark" : "play.fill")
-                    .font(.caption.bold()).foregroundStyle(.white).padding(6).background(statusColor).clipShape(Circle()).padding(5)
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                HStack { Text(task.title).font(.subheadline.bold()).lineLimit(1); Spacer(); statusBadge }
+        HStack(spacing: 13) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 15, style: .continuous).fill(statusColor.opacity(0.10))
+                Image(systemName: statusIcon)
+                    .font(.system(size: compact ? 18 : 21, weight: .semibold))
+                    .foregroundStyle(statusColor)
+            }.frame(width: compact ? 46 : 52, height: compact ? 46 : 52)
+            VStack(alignment: .leading, spacing: compact ? 4 : 6) {
+                HStack { Text(task.title).font(.subheadline.bold()).foregroundStyle(ACETheme.cardInk).lineLimit(1); Spacer(); statusBadge }
                 HStack(spacing: 8) {
                     Text(formattedDate(task.createdAt))
                     if let player = task.player, !player.isEmpty { Text("运动员：\(player)").lineLimit(1) }
-                }.font(.caption).foregroundStyle(ACETheme.muted)
+                }.font(.caption).foregroundStyle(ACETheme.cardMuted)
                 if task.isActive {
                     ProgressView(value: displayedProgress, total: 100).tint(ACETheme.green)
-                    Text("\(Int(displayedProgress.rounded()))% · \(displayMessage)").font(.caption2).foregroundStyle(ACETheme.muted).lineLimit(1)
-                } else if task.isComplete {
-                    Text("报告已生成").font(.caption).foregroundStyle(ACETheme.green)
-                } else {
-                    Text(task.failureReason).font(.caption).foregroundStyle(.red).lineLimit(1)
+                    Text("\(Int(displayedProgress.rounded()))% · \(displayMessage)").font(.caption2).foregroundStyle(ACETheme.cardMuted).lineLimit(compact ? 1 : 2)
+                } else if !task.isComplete {
+                    Text(task.failureReason).font(.caption).foregroundStyle(ACETheme.danger).lineLimit(2)
                 }
             }
+            Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(ACETheme.cardMuted.opacity(0.7))
         }
-        .padding(11)
+        .padding(compact ? 11 : 13)
         .background(ACETheme.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(ACETheme.line.opacity(0.8), lineWidth: 1) }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(ACETheme.cardLine, lineWidth: 1) }
     }
-    private var statusColor: Color { task.isComplete ? ACETheme.green : task.status == "failed" ? .red : ACETheme.green.opacity(0.85) }
+    private var statusColor: Color { task.isComplete ? ACETheme.green : task.status == "failed" ? ACETheme.danger : ACETheme.green }
     private var displayedProgress: Double {
         guard let localUpload else { return Double(task.progress) }
         if localUpload.totalBytes > 0 {
@@ -254,7 +308,13 @@ private struct LibraryTaskRow: View {
         guard let localUpload else { return task.clientMessage.isEmpty ? task.stage : task.clientMessage }
         return localUpload.message
     }
-    private var statusBadge: some View { Text(statusName).font(.caption2.bold()).padding(.horizontal, 9).padding(.vertical, 4).foregroundStyle(statusColor).background(statusColor.opacity(0.11)).clipShape(Capsule()) }
+    private var statusBadge: some View { ACEStatusPill(title: statusName, color: statusColor) }
+    private var statusIcon: String {
+        if task.isComplete { return "checkmark.circle.fill" }
+        if task.status == "failed" { return "exclamationmark.triangle.fill" }
+        if localUpload?.message.hasPrefix("排队中") == true || task.status == "queued" { return "clock.fill" }
+        return "waveform.path.ecg"
+    }
     private var statusName: String {
         if localUpload?.message.hasPrefix("排队中") == true { return "排队中" }
         switch task.status {
@@ -294,10 +354,6 @@ private enum TaskDateFormatter {
 
 private struct TaskProgressView: View {
     @State private var currentTask: TaskItem
-    @State private var cuts: [ProgressiveCut] = []
-    @State private var activeCut: ProgressiveCut?
-    @State private var analyzingCutID: String?
-    @State private var cutError = ""
     @ObservedObject var store: TaskStore
     @EnvironmentObject private var uploads: UploadManager
 
@@ -318,9 +374,6 @@ private struct TaskProgressView: View {
             while !Task.isCancelled && currentTask.isActive {
                 if let refreshed = await store.detail(id: currentTask.id) {
                     currentTask = refreshed
-                    if let response = try? await APIClient.shared.progressiveCuts(taskID: currentTask.id) {
-                        cuts = response.cuts
-                    }
                     if refreshed.isComplete {
                         await store.load()
                         break
@@ -329,13 +382,6 @@ private struct TaskProgressView: View {
                 if currentTask.isActive {
                     try? await Task.sleep(for: .seconds(3))
                 }
-            }
-        }
-        .sheet(item: $activeCut) { cut in
-            NavigationStack {
-                AuthenticatedWebView(path: cut.viewerURL)
-                    .navigationTitle(cut.label)
-                    .navigationBarTitleDisplayMode(.inline)
             }
         }
     }
@@ -364,9 +410,6 @@ private struct TaskProgressView: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(store.retryingTaskIDs.contains(currentTask.id))
             }
-            // Progressive cuts are an internal processing artifact. Displaying
-            // them before completion makes every row look clickable while the
-            // report and source media are still being assembled.
         }
         .padding(28)
         }
@@ -374,46 +417,6 @@ private struct TaskProgressView: View {
         .navigationTitle("分析状态").navigationBarTitleDisplayMode(.inline)
     }
 
-    private var progressiveCutList: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("训练片段").font(.headline).foregroundStyle(ACETheme.ink)
-            Text("选择需要查看的片段后，系统会生成该回合的逐拍报告。")
-                .font(.caption).foregroundStyle(ACETheme.muted)
-            ForEach(cuts) { cut in
-                Button {
-                    guard analyzingCutID == nil else { return }
-                    Task {
-                        analyzingCutID = cut.id
-                        do {
-                            currentTask = try await APIClient.shared.analyzeCut(taskID: currentTask.id, cutID: cut.id)
-                        } catch {
-                            cutError = error.localizedDescription
-                            analyzingCutID = nil
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: cut.isReady ? "play.circle.fill" : "clock.arrow.circlepath")
-                            .font(.title3).foregroundStyle(cut.isReady ? ACETheme.green : ACETheme.muted)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(cut.label).font(.subheadline.bold()).foregroundStyle(ACETheme.ink)
-                            Text("\(TaskDateFormatter.cutTime(cut.start)) - \(TaskDateFormatter.cutTime(cut.end))")
-                                .font(.caption).foregroundStyle(ACETheme.muted)
-                        }
-                        Spacer()
-                        Text(analyzingCutID == cut.id ? "正在创建报告" : cut.stateLabel).font(.caption.bold()).foregroundStyle(cut.isReady ? ACETheme.green : ACETheme.muted)
-                    }
-                    .padding(13).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                .buttonStyle(.plain)
-                .disabled(cut.state == "empty")
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .alert("逐拍分析未提交", isPresented: Binding(get: { !cutError.isEmpty }, set: { if !$0 { cutError = "" } })) {
-            Button("知道了", role: .cancel) { cutError = "" }
-        } message: { Text(cutError) }
-    }
 
     private var localUpload: UploadSnapshot? { uploads.snapshot(for: currentTask.id) }
     private var displayedProgress: Double {
@@ -441,6 +444,10 @@ private struct ReviewReportView: View {
     @State private var showVideo = false
     @State private var showPDF = false
     @State private var loadError = ""
+    private var overviewMetrics: [ReportMetric] {
+        let scoreLabels = ["综合评分", "综合得分", "总分", "评分"]
+        return (summary?.metrics ?? []).filter { !scoreLabels.contains($0.label) }
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -448,7 +455,7 @@ private struct ReviewReportView: View {
                 taskMetadata
                 Text("技术概览").font(.headline).foregroundStyle(ACETheme.ink)
                 HStack(spacing: 10) {
-                    ForEach((summary?.metrics ?? []).prefix(3)) { metric in
+                    ForEach(overviewMetrics.prefix(3)) { metric in
                         VStack(spacing: 7) { Image(systemName: "target").foregroundStyle(ACETheme.green); Text(metric.value).font(.headline); Text(metric.label).font(.caption2).foregroundStyle(ACETheme.muted) }
                             .frame(maxWidth: .infinity).padding(13).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 12))
                     }
@@ -529,18 +536,80 @@ private struct ReviewReportView: View {
     private var scoreHeader: some View {
         HStack(spacing: 18) {
             let score = summary?.overallScore
-            ZStack { Circle().stroke(ACETheme.line, lineWidth: 9); Circle().trim(from: 0, to: CGFloat((score ?? 0) / 100)).stroke(ACETheme.green, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90)); VStack(spacing: 1) { Text(score.map { String(Int($0.rounded())) } ?? "--").font(.system(size: 32, weight: .bold)); Text(score == nil ? "暂无评分" : "综合评分").font(.caption2) } }
+            ZStack { Circle().stroke(ACETheme.line, lineWidth: 9); Circle().trim(from: 0, to: CGFloat((score ?? 0) / 100)).stroke(ACETheme.green, style: StrokeStyle(lineWidth: 9, lineCap: .round)).rotationEffect(.degrees(-90)); VStack(spacing: 1) { Text(score.map { String(Int($0.rounded())) } ?? "--").font(.system(size: 32, weight: .bold)); Text(score == nil ? "暂无评分" : (summary?.isPartialScore == true ? "阶段评分" : "综合评分")).font(.caption2) } }
                 .frame(width: 112, height: 112).foregroundStyle(ACETheme.green)
-            VStack(alignment: .leading, spacing: 5) { Text(task.title).font(.title3.bold()).foregroundStyle(ACETheme.ink); Text(task.player?.isEmpty == false ? task.player! : "训练复盘").font(.caption).foregroundStyle(ACETheme.muted); Label("已完成", systemImage: "checkmark.seal.fill").font(.caption.bold()).foregroundStyle(ACETheme.green); if score == nil { Text("尚未进行逐拍分析，暂无评分").font(.caption).foregroundStyle(ACETheme.muted) } }
+            VStack(alignment: .leading, spacing: 5) { Text(task.title).font(.title3.bold()).foregroundStyle(ACETheme.ink); Text(task.player?.isEmpty == false ? task.player! : "训练复盘").font(.caption).foregroundStyle(ACETheme.muted); Label("已完成", systemImage: "checkmark.seal.fill").font(.caption.bold()).foregroundStyle(ACETheme.green); if score == nil { Text("解析任一 Cut 后即可生成阶段评分").font(.caption).foregroundStyle(ACETheme.muted) } else if summary?.isPartialScore == true { Text("已解析 \(summary?.scoreCoverage ?? "部分回合") · 继续解析会自动更新").font(.caption).foregroundStyle(ACETheme.muted) } }
             Spacer()
         }
         .padding(17).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay { RoundedRectangle(cornerRadius: 16).stroke(ACETheme.line, lineWidth: 1) }
     }
 }
 
+private struct DeleteTaskSheet: View {
+    let task: TaskItem
+    let onDelete: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: "trash.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(ACETheme.danger)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("删除这条复盘？").font(.title3.bold()).foregroundStyle(ACETheme.ink)
+                    Text(task.title).font(.subheadline).foregroundStyle(ACETheme.cardMuted).lineLimit(1)
+                }
+            }
+            Text("将同时移除视频、分析结果和报告，删除后无法恢复。")
+                .font(.footnote).foregroundStyle(ACETheme.cardMuted)
+            HStack(spacing: 10) {
+                Button("取消") { dismiss() }
+                    .buttonStyle(SecondaryButtonStyle())
+                Button {
+                    dismiss()
+                    onDelete()
+                } label: {
+                    Label("确认删除", systemImage: "trash.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(DestructiveButtonStyle())
+            }
+        }
+        .padding(22)
+        .background(ACETheme.cream)
+        .presentationBackground(ACETheme.cream)
+    }
+}
+
+private struct DestructiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.vertical, 13)
+            .background(Color.red.opacity(configuration.isPressed ? 0.72 : 0.9), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+
+private struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(ACETheme.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(ACETheme.paper, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(ACETheme.cardLine, lineWidth: 1) }
+            .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
 private struct AuthenticatedVideoView: View {
     let path: String
     @State private var player: AVPlayer?
+    @State private var localVideoURL: URL?
     @State private var error = ""
 
     var body: some View {
@@ -564,10 +633,20 @@ private struct AuthenticatedVideoView: View {
                 let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
                 try? FileManager.default.removeItem(at: destination)
                 try FileManager.default.moveItem(at: localURL, to: destination)
+                localVideoURL = destination
                 player = AVPlayer(url: destination)
             } catch let failure { error = failure.localizedDescription }
         }
+        .onDisappear {
+            player?.pause()
+            player = nil
+            if let localVideoURL {
+                try? FileManager.default.removeItem(at: localVideoURL)
+                self.localVideoURL = nil
+            }
+        }
     }
+
 }
 
 private struct TennisCourtThumbnail: View {

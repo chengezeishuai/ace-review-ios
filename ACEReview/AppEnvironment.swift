@@ -2,6 +2,30 @@ import Foundation
 import SwiftUI
 import UIKit
 
+enum ACEKeyboard {
+    static func dismiss() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+
+extension View {
+    /// Gives every editable screen the same keyboard accessory and interactive dismissal.
+    /// Keeping this at the shared UI layer prevents one form from silently losing the
+    /// dismiss action when another TextField is added later.
+    func aceKeyboardSupport() -> some View {
+        scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button { ACEKeyboard.dismiss() } label: {
+                        Label("收起键盘", systemImage: "keyboard.chevron.compact.down")
+                    }
+                    .accessibilityLabel("收起键盘")
+                }
+            }
+    }
+}
+
 struct ACEPalette: Identifiable, Equatable {
     let id: String
     let name: String
@@ -67,14 +91,42 @@ extension Color {
 
 enum ACETheme {
     private static var palette: ACEPalette { ThemeStore.shared.palette }
-    static var ink: Color { Color(aceHex: "17231C") }
+
+    // The selected palette drives both App chrome and generated reports. Text
+    // colors are derived from luminance so a custom background cannot make the
+    // interface unreadable.
+    static var ink: Color { isDark(palette.background) ? .white : Color(aceHex: "142018") }
+    static var cardInk: Color { isDark(palette.card) ? .white : Color(aceHex: "142018") }
     static var green: Color { Color(aceHex: palette.primary) }
     static var lime: Color { Color(aceHex: palette.accent) }
-    static var coral: Color { Color(aceHex: palette.accent) }
+    static let coral = Color(aceHex: "E96B4B")
     static var cream: Color { Color(aceHex: palette.background) }
     static var paper: Color { Color(aceHex: palette.card) }
-    static var muted: Color { green.opacity(0.70) }
-    static var line: Color { green.opacity(0.20) }
+    static var muted: Color { ink.opacity(0.62) }
+    static var line: Color { ink.opacity(0.13) }
+    static var cardMuted: Color { cardInk.opacity(0.62) }
+    static var cardLine: Color { cardInk.opacity(0.12) }
+    static var softGreen: Color { green.opacity(isDark(palette.background) ? 0.24 : 0.10) }
+    static var onPrimary: Color { isDark(palette.primary) ? .white : Color(aceHex: "142018") }
+    static let warning = Color(aceHex: "B65C20")
+    static let danger = Color(aceHex: "C63C3C")
+
+    static var heroGradient: LinearGradient {
+        LinearGradient(
+            colors: [green.opacity(0.92), green, lime.opacity(0.88)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private static func isDark(_ hex: String) -> Bool {
+        let value = UInt64(hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted), radix: 16) ?? 0
+        func channel(_ shift: UInt64) -> Double {
+            let component = Double((value >> shift) & 0xFF) / 255
+            return component <= 0.03928 ? component / 12.92 : pow((component + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0) < 0.42
+    }
 }
 
 struct ACEBackground: View {
@@ -89,8 +141,156 @@ struct ACEBrandMark: View {
         ZStack {
             Circle().fill(ACETheme.green)
             Circle().stroke(ACETheme.lime.opacity(0.72), lineWidth: size * 0.05).padding(size * 0.15)
-            Circle().trim(from: 0.12, to: 0.47).stroke(.white.opacity(0.9), style: StrokeStyle(lineWidth: size * 0.045, lineCap: .round)).rotationEffect(.degrees(-18)).padding(size * 0.24)
+            Circle().trim(from: 0.12, to: 0.47).stroke(ACETheme.onPrimary.opacity(0.9), style: StrokeStyle(lineWidth: size * 0.045, lineCap: .round)).rotationEffect(.degrees(-18)).padding(size * 0.24)
         }.frame(width: size, height: size)
+    }
+}
+
+struct ACEIconBadge: View {
+    let systemImage: String
+    var color = ACETheme.green
+    var size: CGFloat = 40
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.42, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: size, height: size)
+            .background(color.opacity(0.11), in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
+    }
+}
+
+struct ACESettingsRow: View {
+    let icon: String
+    let title: String
+    let subtitle: String?
+    let tint: Color
+    let trailing: AnyView
+
+    init<Trailing: View>(
+        icon: String,
+        title: String,
+        subtitle: String? = nil,
+        tint: Color = ACETheme.green,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.tint = tint
+        self.trailing = AnyView(trailing())
+    }
+
+    var body: some View {
+        HStack(spacing: 13) {
+            ACEIconBadge(systemImage: icon, color: tint, size: 38)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(ACETheme.cardInk)
+                if let subtitle { Text(subtitle).font(.caption).foregroundStyle(ACETheme.cardMuted).lineLimit(2) }
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+}
+
+extension ACESettingsRow {
+    init(icon: String, title: String, subtitle: String? = nil, tint: Color = ACETheme.green) {
+        self.init(icon: icon, title: title, subtitle: subtitle, tint: tint) {
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(ACETheme.cardMuted)
+        }
+    }
+}
+
+struct ACEGroupCard<Content: View>: View {
+    let content: Content
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
+
+    var body: some View {
+        content
+            .background(ACETheme.paper)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(ACETheme.cardLine, lineWidth: 1) }
+    }
+}
+
+struct ACEPageHeader<Trailing: View>: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    let trailing: Trailing
+
+    init(
+        eyebrow: String,
+        title: String,
+        subtitle: String,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.eyebrow = eyebrow
+        self.title = title
+        self.subtitle = subtitle
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(eyebrow.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.4)
+                    .foregroundStyle(ACETheme.green)
+                Text(title)
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundStyle(ACETheme.ink)
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(ACETheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+    }
+}
+
+extension ACEPageHeader where Trailing == EmptyView {
+    init(eyebrow: String, title: String, subtitle: String) {
+        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle) { EmptyView() }
+    }
+}
+
+struct ACEStatusPill: View {
+    let title: String
+    let color: Color
+    var systemImage: String?
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let systemImage { Image(systemName: systemImage) }
+            Text(title)
+        }
+        .font(.caption2.weight(.bold))
+        .foregroundStyle(color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(color.opacity(0.11), in: Capsule())
+    }
+}
+
+struct ACESectionTitle: View {
+    let title: String
+    var subtitle: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.headline).foregroundStyle(ACETheme.ink)
+            if let subtitle { Text(subtitle).font(.caption).foregroundStyle(ACETheme.muted) }
+        }
     }
 }
 
@@ -123,7 +323,7 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 16, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(ACETheme.onPrimary)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 24)
             .padding(.vertical, 15)
@@ -142,7 +342,7 @@ struct PrimaryActionLabel: View {
         HStack(spacing: 9) {
             if isWorking {
                 ProgressView()
-                    .tint(.white)
+                    .tint(ACETheme.onPrimary)
             }
             Text(title)
                 .multilineTextAlignment(.center)
@@ -160,11 +360,11 @@ extension View {
         self
             .padding(20)
             .background(ACETheme.paper)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(ACETheme.line.opacity(0.72), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(ACETheme.cardLine, lineWidth: 1)
             }
-            .shadow(color: ACETheme.green.opacity(0.07), radius: 16, y: 6)
+            .shadow(color: Color.black.opacity(0.045), radius: 14, y: 6)
     }
 }

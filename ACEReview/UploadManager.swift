@@ -107,12 +107,40 @@ private final class UploadSlot: NSObject, ObservableObject {
     private var preparationTimer: Timer?
     private var preparationStartedAt: Date?
     private var responseBodies: [Int: Data] = [:]
+    // URLSession reports progress for whichever parallel part emitted the
+    // latest callback. Keeping only that part's value made the aggregate UI
+    // jump backwards (for example 2% -> 1%). Track every in-flight part.
+    private var inFlightBytes: [Int: Int64] = [:]
+    // A background URLSession task can be dropped by iOS or by a transient
+    // network/Nginx timeout. Keep the part resumable instead of failing the
+    // entire video upload, and avoid scheduling the same part twice.
+    private var activePartIndices: Set<Int> = []
+    private var partRetryCounts: [Int: Int] = [:]
+    private static let maximumPartRetries = 6
+    private var maxReportedBytes: Int64 = 0
+    private var progressSampleBytes: Int64 = 0
+    private var progressSampleTime = Date()
     private var waitingForUploadGate = false
     private var holdsUploadGate = false
+    private var lifecycleObserver: NSObjectProtocol?
 
     // Photos resource reads and local part generation are serialized. Network
     // upload still uses the existing background URLSession after each part is ready.
     private static let uploadGate = DispatchSemaphore(value: 1)
+    private static let uploadGateStateLock = NSLock()
+    private static var uploadGateBusy = false
+
+    private static func markGateAcquired() {
+        uploadGateStateLock.lock()
+        uploadGateBusy = true
+        uploadGateStateLock.unlock()
+    }
+
+    private static func markGateReleased() {
+        uploadGateStateLock.lock()
+        uploadGateBusy = false
+        uploadGateStateLock.unlock()
+    }
 
     // The Photos import can take longer than the visible preparation period.
     // Keep the first 0-15% bounded, then make it clear that background upload
@@ -120,7 +148,19 @@ private final class UploadSlot: NSObject, ObservableObject {
     private static let minimumPreparationDisplay: TimeInterval = 10
     private static let progressTick: TimeInterval = 0.05
     private static let preparationMessage = "正在准备视频文件"
-    private static let uploadMessage = "文件开始上传，请稍后"
+    private static let uploadMessage = "正在上传；请尽量保持 App 前台，锁屏或切换应用时系统可能暂时暂停"
+
+    private func diagnostic(_ message: String) {
+        let stamp = DateFormatter.localizedString(
+            from: Date(), dateStyle: .none, timeStyle: .medium
+        )
+        publish {
+            self.snapshot.diagnostics.append("\(stamp)  \(message)")
+            if self.snapshot.diagnostics.count > 40 {
+                self.snapshot.diagnostics.removeFirst(self.snapshot.diagnostics.count - 40)
+            }
+        }
+    }
 
     private lazy var delegateQueue: OperationQueue = {
         let queue = OperationQueue()
@@ -137,7 +177,12 @@ private final class UploadSlot: NSObject, ObservableObject {
         configuration.isDiscretionary = false
         configuration.allowsCellularAccess = true
         configuration.waitsForConnectivity = true
-        configuration.httpMaximumConnectionsPerHost = 4
+        configuration.timeoutIntervalForRequest = 900
+        configuration.timeoutIntervalForResource = 24 * 60 * 60
+        // Parts are generated sequentially from Photos, but uploads of ready
+        // parts can overlap. A larger part avoids hundreds of request/DB
+        // round-trips for 1 GB recordings while retaining resumability.
+        configuration.httpMaximumConnectionsPerHost = 6
         let session = URLSession(
             configuration: configuration,
             delegate: self,
@@ -147,12 +192,52 @@ private final class UploadSlot: NSObject, ObservableObject {
         return session
     }()
 
+    // A foreground session starts ready-made part files immediately. Background
+    // sessions are intentionally conservative and may wait for the system's
+    // scheduling window, which made a visible upload appear frozen while the
+    // app was open. We use this session while the app is active and retain the
+    // background session for transfers that continue after suspension.
+    private lazy var foregroundSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        // Do not leave a foreground part suspended behind the connectivity
+        // waiter. The upload screen must either send immediately or surface a
+        // concrete network error so the retry path can run.
+        configuration.waitsForConnectivity = false
+        configuration.allowsCellularAccess = true
+        configuration.timeoutIntervalForRequest = 300
+        configuration.timeoutIntervalForResource = 900
+        configuration.networkServiceType = .responsiveData
+        configuration.httpMaximumConnectionsPerHost = 6
+        return URLSession(
+            configuration: configuration,
+            delegate: self,
+            delegateQueue: delegateQueue
+        )
+    }()
+
+    // Always use the background-capable session. Tasks created by a
+    // foreground-only session are suspended when the user locks the phone or
+    // switches apps and cannot be migrated after the fact.
+    private var uploadSession: URLSession { backgroundSession }
+
     init(slotIndex: Int) {
         self.slotIndex = slotIndex
-        self.backgroundIdentifier = slotIndex == 0
-            ? "com.ace.review.background-upload"
-            : "com.ace.review.background-upload.secondary"
+        self.backgroundIdentifier = switch slotIndex {
+        case 0: "com.ace.review.background-upload"
+        case 1: "com.ace.review.background-upload.secondary"
+        default: "com.ace.review.background-upload.\(slotIndex)"
+        }
         super.init()
+        lifecycleObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            // Reconcile URLSession tasks whenever the app returns to the
+            // foreground. This recovers parts whose background task was
+            // interrupted while the user switched apps or locked the phone.
+            self?.restoreBackgroundTasks()
+        }
         manifest = loadManifest()
         if let manifest {
             let restoredUploadedBytes: Int64
@@ -201,12 +286,22 @@ private final class UploadSlot: NSObject, ObservableObject {
         restoreBackgroundTasks()
     }
 
+    deinit {
+        if let lifecycleObserver {
+            NotificationCenter.default.removeObserver(lifecycleObserver)
+        }
+    }
+
     func begin(
         asset: PHAsset,
         title: String,
         player: String,
         notes: String,
         analysisScope: String,
+        athleteGender: String,
+        athleteLevel: String,
+        athleteHandedness: String,
+        athleteGoal: String,
         onTaskCreated: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (String) -> Void = { _ in }
     ) {
@@ -252,7 +347,11 @@ private final class UploadSlot: NSObject, ObservableObject {
                     capturedAt: asset.creationDate.map { ISO8601DateFormatter().string(from: $0) },
                     captureLocation: captureLocation,
                     reportTheme: ThemeStore.shared.palette,
-                    analysisScope: analysisScope
+                    analysisScope: analysisScope,
+                    athleteGender: athleteGender,
+                    athleteLevel: athleteLevel,
+                    athleteHandedness: athleteHandedness,
+                    athleteGoal: athleteGoal
                 )
                 let folder = try self.uploadDirectory(taskID: response.task.id)
                 let newManifest = UploadManifest(
@@ -272,11 +371,14 @@ private final class UploadSlot: NSObject, ObservableObject {
                 self.publish {
                     self.lock.lock()
                     self.manifest = newManifest
+                    self.inFlightBytes.removeAll()
+                    self.maxReportedBytes = 0
                     self.persistManifestUnlocked()
                     self.lock.unlock()
                     self.activeTaskID = response.task.id
                     onTaskCreated(response.task.id)
                 }
+                self.diagnostic("任务已创建 taskID=\(response.task.id), partSize=\(response.partSize)")
                 self.startReadingWhenAvailable(
                     asset: asset,
                     resource: resource,
@@ -361,7 +463,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                     self?.preparationTimer = nil
                     return
                 }
-                if self.waitingForUploadGate {
+                if self.isWaitingForUploadGate {
                     self.snapshot.isShowingPreparation = true
                     self.snapshot.message = "排队中，等待前一个视频上传完成"
                     return
@@ -372,9 +474,12 @@ private final class UploadSlot: NSObject, ObservableObject {
                         self.snapshot.preparationPercent,
                         Self.preparationPercent(since: startedAt)
                     )
+                    // Never infer that uploading has started from elapsed time.
+                    // Photos/iCloud may still be reading the original resource
+                    // after ten seconds. The state changes to uploading only
+                    // when the first local part has actually been generated.
                     if elapsed >= Self.minimumPreparationDisplay {
-                        self.snapshot.isShowingPreparation = false
-                        self.snapshot.message = Self.uploadMessage
+                        self.snapshot.message = "正在准备视频资源，请保持 App 打开"
                     }
                 }
                 if !self.snapshot.isShowingPreparation {
@@ -500,15 +605,23 @@ private final class UploadSlot: NSObject, ObservableObject {
         options.progressHandler = { [weak self] progress in
             self?.publish {
                 guard let self else { return }
-                _ = progress
+                // Photos reports the real resource-download progress. The old
+                // code discarded it and displayed a time-based 1%, which made
+                // an iCloud original look frozen for minutes.
+                let resourcePercent = Int((progress * 100).rounded())
                 let startedAt = self.preparationStartedAt ?? Date()
+                let elapsedPercent = Self.preparationPercent(since: startedAt)
                 self.snapshot.preparationPercent = max(
                     self.snapshot.preparationPercent,
-                    Self.preparationPercent(since: startedAt)
+                    min(95, max(resourcePercent, elapsedPercent))
                 )
-                self.snapshot.message = self.snapshot.isShowingPreparation
-                    ? Self.preparationMessage
-                    : Self.uploadMessage
+                if self.snapshot.isShowingPreparation {
+                    self.snapshot.message = resourcePercent < 1
+                        ? "正在从照片读取原视频（可能需要从 iCloud 下载）"
+                        : "正在读取原视频 \(resourcePercent)%"
+                } else {
+                    self.snapshot.message = Self.uploadMessage
+                }
             }
         }
         var readFailure: Error?
@@ -563,6 +676,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                 }
             }
         )
+        diagnostic("已启动 Photos 资源读取")
     }
 
     private func resumeInterruptedImport(_ manifest: UploadManifest) {
@@ -596,6 +710,12 @@ private final class UploadSlot: NSObject, ObservableObject {
         let uploadToken = manifest?.uploadToken
         lock.unlock()
         guard let uploadToken else { return }
+        diagnostic("分片已生成 index=\(index), size=\(size), path=\(fileURL.lastPathComponent)")
+        publish {
+            self.snapshot.phase = .uploading
+            self.snapshot.isShowingPreparation = false
+            self.snapshot.message = "正在上传视频分片"
+        }
         schedulePart(taskID: taskID, uploadToken: uploadToken, index: index, fileURL: fileURL)
     }
 
@@ -609,13 +729,15 @@ private final class UploadSlot: NSObject, ObservableObject {
             guard let self else { return }
             let immediatelyAvailable = Self.uploadGate.wait(timeout: .now()) == .success
             if !immediatelyAvailable {
-                self.waitingForUploadGate = true
+                self.setWaitingForUploadGate(true)
                 self.publish {
                     self.snapshot.isShowingPreparation = true
-                    self.snapshot.message = "排队中，等待前一个视频上传完成"
+                    self.snapshot.message = "排队中，等待前一个视频完成读取"
                 }
                 Self.uploadGate.wait()
             }
+            // Keep the state used by the UI in sync with the semaphore.
+            Self.markGateAcquired()
             self.lock.lock()
             self.waitingForUploadGate = false
             self.holdsUploadGate = true
@@ -641,7 +763,20 @@ private final class UploadSlot: NSObject, ObservableObject {
         }
         holdsUploadGate = false
         lock.unlock()
+        Self.markGateReleased()
         Self.uploadGate.signal()
+    }
+
+    private var isWaitingForUploadGate: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return waitingForUploadGate
+    }
+
+    private func setWaitingForUploadGate(_ value: Bool) {
+        lock.lock()
+        waitingForUploadGate = value
+        lock.unlock()
     }
 
     private func captureLocationText(_ location: CLLocation?) async -> String? {
@@ -663,6 +798,21 @@ private final class UploadSlot: NSObject, ObservableObject {
     }
 
     private func schedulePart(taskID: String, uploadToken: String, index: Int, fileURL: URL) {
+        lock.lock()
+        let alreadyCompleted = manifest?.completedParts.contains(index) == true
+        let alreadyActive = activePartIndices.contains(index)
+        if !alreadyCompleted && !alreadyActive {
+            activePartIndices.insert(index)
+        }
+        lock.unlock()
+        guard !alreadyCompleted, !alreadyActive else { return }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            lock.lock()
+            activePartIndices.remove(index)
+            lock.unlock()
+            diagnostic("分片文件不存在，无法上传 index=\(index)")
+            return
+        }
         var request = URLRequest(
             url: APIClient.shared.url(
                 for: "api/app/uploads/\(taskID)/parts/\(index)"
@@ -682,9 +832,15 @@ private final class UploadSlot: NSObject, ObservableObject {
             request.setValue(size.stringValue, forHTTPHeaderField: "Content-Length")
         }
         attachAuthorization(to: &request)
-        let task = backgroundSession.uploadTask(with: request, fromFile: fileURL)
+        let task = uploadSession.uploadTask(with: request, fromFile: fileURL)
+        task.priority = URLSessionTask.highPriority
+        if let size = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size]) as? NSNumber {
+            task.countOfBytesClientExpectsToSend = size.int64Value
+        }
         task.taskDescription = "part|\(taskID)|\(index)|\(fileURL.path)"
+        diagnostic("已创建上传任务 index=\(index), state=\(task.state.rawValue)")
         task.resume()
+        diagnostic("已调用 resume index=\(index), state=\(task.state.rawValue)")
     }
 
     private func maybeScheduleFinalize() {
@@ -730,7 +886,7 @@ private final class UploadSlot: NSObject, ObservableObject {
             }
             request.setValue(manifest.uploadToken, forHTTPHeaderField: "X-ACE-Upload-Token")
             attachAuthorization(to: &request)
-            let task = backgroundSession.uploadTask(with: request, fromFile: bodyURL)
+            let task = uploadSession.uploadTask(with: request, fromFile: bodyURL)
             task.taskDescription = "finalize|\(manifest.taskID)|-1|\(bodyURL.path)"
             publish {
                 self.snapshot.phase = .finalizing
@@ -772,9 +928,11 @@ private final class UploadSlot: NSObject, ObservableObject {
             for: .applicationSupportDirectory,
             in: .userDomainMask
         )[0]
-        let filename = slotIndex == 0
-            ? "ace-upload-manifest.json"
-            : "ace-upload-manifest-secondary.json"
+        let filename = switch slotIndex {
+        case 0: "ace-upload-manifest.json"
+        case 1: "ace-upload-manifest-secondary.json"
+        default: "ace-upload-manifest-\(slotIndex).json"
+        }
         return support.appendingPathComponent(filename)
     }
 
@@ -893,6 +1051,7 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
             omittingEmptySubsequences: false
         ).map(String.init)
         guard fields.count == 4, let index = Int(fields[2]) else { return }
+        diagnostic("收到发送进度 index=\(index), sent=\(totalBytesSent)/\(totalBytesExpectedToSend)")
         lock.lock()
         let totalBytes = manifest?.totalBytes ?? 0
         let partSize = manifest?.partSize ?? 0
@@ -901,6 +1060,27 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
             let start = Int64(completedIndex * partSize)
             return partial + min(Int64(partSize), max(0, totalBytes - start))
         }
+        let currentPartStart = Int64(index * partSize)
+        let currentPartCapacity = min(Int64(partSize), max(0, totalBytes - currentPartStart))
+        inFlightBytes[index] = min(totalBytesSent, currentPartCapacity)
+        let inFlightTotal = inFlightBytes.reduce(Int64(0)) { partial, item in
+            completedParts.contains(item.key) ? partial : partial + item.value
+        }
+        let aggregateBytes = min(totalBytes, completedBytes + inFlightTotal)
+        maxReportedBytes = max(maxReportedBytes, aggregateBytes)
+        let now = Date()
+        let elapsed = now.timeIntervalSince(progressSampleTime)
+        if elapsed >= 0.5 {
+            let delta = max(0, maxReportedBytes - progressSampleBytes)
+            let speed = Double(delta) / elapsed
+            progressSampleBytes = maxReportedBytes
+            progressSampleTime = now
+            let remaining = speed > 0 ? Int(Double(max(0, totalBytes - maxReportedBytes)) / speed) : nil
+            publish {
+                self.snapshot.uploadSpeedBytesPerSecond = speed
+                self.snapshot.estimatedSecondsRemaining = remaining
+            }
+        }
         lock.unlock()
         publish {
             self.snapshot.phase = .uploading
@@ -908,13 +1088,7 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
                 ? Self.preparationMessage
                 : Self.uploadMessage
             guard totalBytes > 0 else { return }
-            let currentPartStart = Int64(index * partSize)
-            let currentPartCapacity = min(
-                Int64(partSize),
-                max(0, totalBytes - currentPartStart)
-            )
-            let transmitted = min(totalBytesSent, currentPartCapacity)
-            self.snapshot.bytesUploaded = min(totalBytes, completedBytes + transmitted)
+            self.snapshot.bytesUploaded = self.maxReportedBytes
         }
     }
 
@@ -933,12 +1107,43 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
         let kind = fields[0]
         let taskID = fields[1]
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
+        let errorText = error?.localizedDescription ?? "none"
+        diagnostic("上传任务结束 kind=\(kind), index=\(fields[2]), http=\(status), error=\(errorText)")
         let responseBody = responseBodies.removeValue(forKey: task.taskIdentifier)
         let envelope = responseBody.flatMap { try? JSONDecoder().decode(UploadResponse.self, from: $0) }
         guard error == nil,
               (200..<300).contains(status),
               envelope?.code == 200 else {
             lock.lock()
+            if kind == "part", let index = Int(fields[2]) {
+                activePartIndices.remove(index)
+                inFlightBytes.removeValue(forKey: index)
+                let attempt = (partRetryCounts[index] ?? 0) + 1
+                partRetryCounts[index] = attempt
+                let retryable = attempt <= Self.maximumPartRetries
+                persistManifestUnlocked()
+                lock.unlock()
+                if retryable {
+                    let delay = min(30.0, pow(2.0, Double(attempt - 1)))
+                    diagnostic("分片上传暂时中断 index=\(index)，第\(attempt)次重试，\(Int(delay))秒后继续")
+                    publish {
+                        self.snapshot.phase = .uploading
+                        self.snapshot.message = "网络波动，正在自动续传（分片 \(index + 1)）"
+                    }
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) { [weak self] in
+                        guard let self else { return }
+                        self.lock.lock()
+                        let manifest = self.manifest
+                        let completed = manifest?.completedParts.contains(index) == true
+                        self.lock.unlock()
+                        guard let manifest, !completed else { return }
+                        let file = self.directoryForExistingTask(manifest.taskID)
+                            .appendingPathComponent(String(format: "%08d.part", index))
+                        self.schedulePart(taskID: manifest.taskID, uploadToken: manifest.uploadToken, index: index, fileURL: file)
+                    }
+                    return
+                }
+            }
             manifest?.finalizeScheduled = false
             persistManifestUnlocked()
             lock.unlock()
@@ -951,6 +1156,9 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
         if kind == "part", let index = Int(fields[2]) {
             try? FileManager.default.removeItem(atPath: fields[3])
             lock.lock()
+            activePartIndices.remove(index)
+            partRetryCounts.removeValue(forKey: index)
+            inFlightBytes.removeValue(forKey: index)
             manifest?.completedParts.insert(index)
             let completed = manifest?.completedParts.count ?? 0
             let total = manifest?.totalParts ?? 0
@@ -992,9 +1200,10 @@ private struct UploadResponse: Decodable {
 
 final class UploadManager: ObservableObject {
     static let shared = UploadManager()
-    static let maximumConcurrentUploads = 2
+    static let maximumConcurrentUploads = 6
 
     @Published private(set) var snapshots: [String: UploadSnapshot] = [:]
+    @Published private(set) var orderedSnapshots: [IdentifiedUploadSnapshot] = []
     @Published private(set) var activeUploadCount = 0
     @Published private(set) var completionCounter = 0
     @Published private(set) var lastError = ""
@@ -1040,13 +1249,17 @@ final class UploadManager: ObservableObject {
         player: String,
         notes: String,
         analysisScope: String,
+        athleteGender: String,
+        athleteLevel: String,
+        athleteHandedness: String,
+        athleteGoal: String,
         onTaskCreated: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (String) -> Void = { _ in }
     ) {
         guard let index = slots.indices.first(where: {
             !slots[$0].hasActiveUpload && !reservedSlotIndexes.contains($0)
         }) else {
-            let message = "最多可同时提交两个视频，请等待其中一个完成"
+            let message = "最多可排队提交六个视频，请等待其中一个上传完成"
             lastError = message
             onFailure(message)
             return
@@ -1058,6 +1271,10 @@ final class UploadManager: ObservableObject {
             player: player,
             notes: notes,
             analysisScope: analysisScope,
+            athleteGender: athleteGender,
+            athleteLevel: athleteLevel,
+            athleteHandedness: athleteHandedness,
+            athleteGoal: athleteGoal,
             onTaskCreated: onTaskCreated,
             onFailure: onFailure
         )
@@ -1107,6 +1324,9 @@ final class UploadManager: ObservableObject {
         }
         previousActiveTaskIDs = activeIDs
         snapshots = newSnapshots
+        orderedSnapshots = pairs.map {
+            IdentifiedUploadSnapshot(id: $0.0, snapshot: $0.1)
+        }
         activeUploadCount = activeSlots.count
         lastError = activeSlots.compactMap {
             $0.lastError.isEmpty ? nil : $0.lastError

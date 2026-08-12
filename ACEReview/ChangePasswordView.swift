@@ -7,24 +7,23 @@ struct ChangePasswordView: View {
     @State private var confirmation = ""
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                ACETheme.cream.ignoresSafeArea()
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("保护你的账号")
-                        .font(.system(size: 31, weight: .bold, design: .rounded))
-                        .foregroundStyle(ACETheme.ink)
-                    Text("首次登录需要设置一个不少于8位的新密码。")
-                        .foregroundStyle(ACETheme.muted)
-                    Group {
-                        SecureField("当前密码", text: $currentPassword)
-                        SecureField("新密码", text: $newPassword)
-                        SecureField("再次输入新密码", text: $confirmation)
+        ZStack {
+            ACEBackground()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    ACEIconBadge(systemImage: "key.fill", size: 52)
+                    Text("设置安全密码")
+                        .font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(ACETheme.ink)
+                    Text("至少 8 位，建议组合字母、数字和符号，并避免与其他服务重复。")
+                        .font(.subheadline).foregroundStyle(ACETheme.muted)
+                    VStack(spacing: 0) {
+                        passwordField("当前密码", text: $currentPassword, contentType: .password)
+                        Divider().overlay(ACETheme.cardLine).padding(.leading, 16)
+                        passwordField("新密码", text: $newPassword, contentType: .newPassword)
+                        Divider().overlay(ACETheme.cardLine).padding(.leading, 16)
+                        passwordField("再次输入新密码", text: $confirmation, contentType: .newPassword)
                     }
-                    .textContentType(.newPassword)
-                    .padding(16)
-                    .background(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
                     if !session.errorMessage.isEmpty {
                         Text(session.errorMessage)
@@ -52,11 +51,23 @@ struct ChangePasswordView: View {
                             || newPassword != confirmation
                             || session.isWorking
                     )
-                    Spacer()
+                    if !confirmation.isEmpty && newPassword != confirmation {
+                        Label("两次输入的新密码不一致", systemImage: "exclamationmark.circle.fill")
+                            .font(.caption).foregroundStyle(ACETheme.danger)
+                    }
                 }
-                .aceCard()
-                .padding(22)
+                .padding(20).padding(.bottom, 30)
             }
         }
+        .navigationTitle("修改密码")
+        .navigationBarTitleDisplayMode(.inline)
+        .aceKeyboardSupport()
+    }
+
+    private func passwordField(_ title: String, text: Binding<String>, contentType: UITextContentType) -> some View {
+        SecureField(title, text: text)
+            .textContentType(contentType)
+            .foregroundStyle(ACETheme.cardInk)
+            .padding(.horizontal, 16).frame(height: 58)
     }
 }

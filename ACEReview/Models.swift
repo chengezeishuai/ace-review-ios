@@ -105,6 +105,16 @@ struct ReportSummary: Decodable {
         let match = metric.value.range(of: #"\d+(?:\.\d+)?"#, options: .regularExpression)
         return match.flatMap { Double(metric.value[$0]) }
     }
+
+    var scoreStatus: String? {
+        metrics.first(where: { $0.label == "评分状态" })?.value
+    }
+
+    var scoreCoverage: String? {
+        metrics.first(where: { $0.label == "已解析回合" })?.value
+    }
+
+    var isPartialScore: Bool { scoreStatus == "阶段评分" }
 }
 
 struct ProgressiveCutsResponse: Decodable {
@@ -340,9 +350,17 @@ struct UploadSnapshot {
     var bytesRead: Int64 = 0
     var bytesUploaded: Int64 = 0
     var totalBytes: Int64 = 0
+    var uploadSpeedBytesPerSecond: Double = 0
+    var estimatedSecondsRemaining: Int? = nil
     var preparationPercent: Int = 0
     var isShowingPreparation = false
     var message = ""
+    var diagnostics: [String] = []
+}
+
+struct IdentifiedUploadSnapshot: Identifiable {
+    let id: String
+    let snapshot: UploadSnapshot
 }
 
 enum TaskLoadState: Equatable {

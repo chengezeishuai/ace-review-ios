@@ -61,7 +61,7 @@ final class APIClient {
             throw APIClientError.server(detail)
         }
         if T.self == EmptyResponse.self, data.isEmpty {
-            return EmptyResponse() as! T
+            return try decoder.decode(T.self, from: Data("{}".utf8))
         }
         let envelope = try decoder.decode(RuoYiEnvelope<T>.self, from: data)
         guard envelope.code == 200 else {
@@ -71,7 +71,7 @@ final class APIClient {
             return value
         }
         if T.self == EmptyResponse.self {
-            return EmptyResponse() as! T
+            return try decoder.decode(T.self, from: Data("{}".utf8))
         }
         throw APIClientError.invalidResponse
     }
@@ -199,7 +199,11 @@ final class APIClient {
         capturedAt: String?,
         captureLocation: String?,
         reportTheme: ACEPalette,
-        analysisScope: String
+        analysisScope: String,
+        athleteGender: String,
+        athleteLevel: String,
+        athleteHandedness: String,
+        athleteGoal: String
     ) async throws -> StreamingUploadResponse {
         try await request(
             "api/app/uploads",
@@ -213,6 +217,10 @@ final class APIClient {
                 "capturedAt": capturedAt ?? "",
                 "captureLocation": captureLocation ?? "",
                 "analysisScope": analysisScope,
+                "athleteGender": athleteGender,
+                "athleteLevel": athleteLevel,
+                "athleteHandedness": athleteHandedness,
+                "athleteGoal": athleteGoal,
                 "reportTheme": [
                     "primary": reportTheme.primary,
                     "accent": reportTheme.accent,

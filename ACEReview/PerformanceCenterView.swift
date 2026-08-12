@@ -10,10 +10,10 @@ struct PerformanceCenterView: View {
             ACETheme.cream.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("综合分析")
+                    Text("训练表现")
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                         .foregroundStyle(ACETheme.ink)
-                    Text("基于已完成且回传真实技术指标的训练报告。")
+                    Text("只汇总真实返回评分的报告；Cut 阶段评分会随解析覆盖度持续更新。")
                         .font(.subheadline)
                         .foregroundStyle(ACETheme.muted)
 
@@ -30,14 +30,14 @@ struct PerformanceCenterView: View {
                         .padding(.vertical, 42)
                     } else {
                         scoreCard
-                        rankingCard
+                        insightStrip
                         reportList
                     }
                 }
                 .padding(18)
             }
         }
-        .navigationTitle("成绩排名")
+        .navigationTitle("训练表现")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
     }
@@ -47,24 +47,26 @@ struct PerformanceCenterView: View {
     }
 
     private var scoreCard: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 20) {
             ZStack {
-                Circle().stroke(ACETheme.line, lineWidth: 11)
+                Circle().stroke(.white.opacity(0.22), lineWidth: 11)
                 Circle().trim(from: 0, to: CGFloat(min(averageScore, 100)) / 100)
-                    .stroke(ACETheme.green, style: StrokeStyle(lineWidth: 11, lineCap: .round))
+                    .stroke(ACETheme.onPrimary, style: StrokeStyle(lineWidth: 11, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                Text("\(averageScore)").font(.title.bold()).foregroundStyle(ACETheme.ink)
+                VStack(spacing: 0) { Text("\(averageScore)").font(.title.bold()); Text("平均分").font(.caption2).opacity(0.72) }
             }
             .frame(width: 96, height: 96)
             VStack(alignment: .leading, spacing: 5) {
-                Text("综合得分").font(.headline).foregroundStyle(ACETheme.ink)
-                Text("来自 \(reports.count) 份真实报告").font(.subheadline).foregroundStyle(ACETheme.muted)
-                Text("排名会在同组织完成评分的成员之间显示。")
-                    .font(.caption).foregroundStyle(ACETheme.muted)
+                Text("综合表现").font(.headline)
+                Text("已计入 \(reports.count) 份训练报告").font(.subheadline).opacity(0.78)
+                Text("仅使用服务端返回的有效评分")
+                    .font(.caption).opacity(0.7)
             }
             Spacer()
         }
-        .aceCard()
+        .foregroundStyle(ACETheme.onPrimary)
+        .padding(20).background(ACETheme.heroGradient).clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: ACETheme.green.opacity(0.18), radius: 16, y: 8)
     }
 
     private var reportList: some View {
@@ -73,33 +75,33 @@ struct PerformanceCenterView: View {
             ForEach(reports) { report in
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(report.title).font(.subheadline.bold()).foregroundStyle(ACETheme.ink)
-                        Text(report.summary).font(.caption).foregroundStyle(ACETheme.muted).lineLimit(2)
+                        Text(report.title).font(.subheadline.bold()).foregroundStyle(ACETheme.cardInk)
+                        Text(report.summary).font(.caption).foregroundStyle(ACETheme.cardMuted).lineLimit(2)
                     }
                     Spacer()
                     Text("\(report.score)").font(.title3.bold()).foregroundStyle(ACETheme.green)
                 }
                 .padding(.vertical, 7)
-                if report.id != reports.last?.id { Divider() }
+                if report.id != reports.last?.id { Divider().overlay(ACETheme.cardLine) }
             }
         }
         .aceCard()
     }
 
-    private var rankingCard: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "trophy")
-                .font(.title3)
-                .foregroundStyle(ACETheme.green)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("成绩排名").font(.headline).foregroundStyle(ACETheme.ink)
-                Text("当前只展示已完成评分的个人表现；同组织排名会在平台返回可比较的真实成绩后显示。")
-                    .font(.caption).foregroundStyle(ACETheme.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
+    private var insightStrip: some View {
+        HStack(spacing: 10) {
+            insight("最高", "\(Int((reports.map(\.score).max() ?? 0).rounded()))", "arrow.up.right")
+            insight("训练数", "\(reports.count)", "doc.text")
+            insight("数据来源", "真实报告", "checkmark.seal")
         }
-        .aceCard()
+    }
+
+    private func insight(_ title: String, _ value: String, _ icon: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon).foregroundStyle(ACETheme.green)
+            Text(value).font(.subheadline.bold()).foregroundStyle(ACETheme.cardInk)
+            Text(title).font(.caption2).foregroundStyle(ACETheme.cardMuted)
+        }.frame(maxWidth: .infinity).padding(.vertical, 14).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
     }
 
     private func load() async {
