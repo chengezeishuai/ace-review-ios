@@ -353,6 +353,7 @@ struct UploadSnapshot {
     var preparationPercent: Int = 0
     var isShowingPreparation = false
     var message = ""
+    var diagnostics: [String] = []
 }
 
 struct IdentifiedUploadSnapshot: Identifiable {

@@ -11,6 +11,7 @@ struct TaskListView: View {
     @State private var deleteToast = ""
     @State private var searchText = ""
     @AppStorage("ace.settings.compactLibrary") private var compactLibrary = false
+    @State private var expandedUploadDiagnostics = Set<String>()
 
     var body: some View {
         ZStack {
@@ -22,7 +23,7 @@ struct TaskListView: View {
                     taskFilters
                     if !uploads.orderedSnapshots.isEmpty {
                         ForEach(uploads.orderedSnapshots) { item in
-                            liveUploadCard(item.snapshot)
+                            liveUploadCard(item.id, item.snapshot)
                         }
                     }
                     if !taskStore.errorMessage.isEmpty {
@@ -167,7 +168,7 @@ struct TaskListView: View {
         }
     }
 
-    private func liveUploadCard(_ snapshot: UploadSnapshot) -> some View {
+    private func liveUploadCard(_ id: String, _ snapshot: UploadSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 11) {
             HStack {
                 Label(uploadHeadline(snapshot), systemImage: "arrow.triangle.2.circlepath")
@@ -262,6 +263,35 @@ private struct LibraryTaskRow: View {
                 } else if !task.isComplete {
                     Text(task.failureReason).font(.caption).foregroundStyle(ACETheme.danger).lineLimit(2)
                 }
+            }
+            if !snapshot.diagnostics.isEmpty {
+                Button {
+                    if expandedUploadDiagnostics.contains(id) {
+                        expandedUploadDiagnostics.remove(id)
+                    } else {
+                        expandedUploadDiagnostics.insert(id)
+                    }
+                } label: {
+                    Label(
+                        expandedUploadDiagnostics.contains(id) ? "收起上传日志" : "查看上传日志",
+                        systemImage: expandedUploadDiagnostics.contains(id) ? "chevron.up" : "ladybug"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ACETheme.green)
+                }
+                .buttonStyle(.plain)
+            }
+            if expandedUploadDiagnostics.contains(id) {
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(snapshot.diagnostics.joined(separator: "\n"))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(ACETheme.cardInk)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(maxHeight: 180)
+                .padding(9)
+                .background(Color.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
             }
             Image(systemName: "chevron.right").font(.caption.bold()).foregroundStyle(ACETheme.cardMuted.opacity(0.7))
         }

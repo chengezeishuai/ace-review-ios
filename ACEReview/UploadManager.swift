@@ -136,6 +136,18 @@ private final class UploadSlot: NSObject, ObservableObject {
     private static let preparationMessage = "正在准备视频文件"
     private static let uploadMessage = "文件开始上传，请稍后"
 
+    private func diagnostic(_ message: String) {
+        let stamp = DateFormatter.localizedString(
+            from: Date(), dateStyle: .none, timeStyle: .medium
+        )
+        publish {
+            self.snapshot.diagnostics.append("\(stamp)  (message)")
+            if self.snapshot.diagnostics.count > 40 {
+                self.snapshot.diagnostics.removeFirst(self.snapshot.diagnostics.count - 40)
+            }
+        }
+    }
+
     private lazy var delegateQueue: OperationQueue = {
         let queue = OperationQueue()
         queue.name = "com.ace.review.upload-delegate.\(slotIndex)"
@@ -663,6 +675,7 @@ private final class UploadSlot: NSObject, ObservableObject {
         let uploadToken = manifest?.uploadToken
         lock.unlock()
         guard let uploadToken else { return }
+        diagnostic("分片已生成 index=\(index), size=\(size), path=\(fileURL.lastPathComponent)")
         publish {
             self.snapshot.phase = .uploading
             self.snapshot.isShowingPreparation = false
@@ -775,7 +788,9 @@ private final class UploadSlot: NSObject, ObservableObject {
             task.countOfBytesClientExpectsToSend = size.int64Value
         }
         task.taskDescription = "part|\(taskID)|\(index)|\(fileURL.path)"
+        diagnostic("已创建上传任务 index=\(index), session=\(task.session.configuration.identifier ?? \"foreground\"), state=\(task.state.rawValue)")
         task.resume()
+        diagnostic("已调用 resume index=\(index), state=\(task.state.rawValue)")
     }
 
     private func maybeScheduleFinalize() {
@@ -986,6 +1001,7 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
             omittingEmptySubsequences: false
         ).map(String.init)
         guard fields.count == 4, let index = Int(fields[2]) else { return }
+        diagnostic("收到发送进度 index=\(index), sent=\(totalBytesSent)/\(totalBytesExpectedToSend)")
         lock.lock()
         let totalBytes = manifest?.totalBytes ?? 0
         let partSize = manifest?.partSize ?? 0
@@ -1026,6 +1042,7 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
         let kind = fields[0]
         let taskID = fields[1]
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
+        diagnostic("上传任务结束 kind=\(kind), index=\(fields[2]), http=\(status), error=\(error?.localizedDescription ?? \"none\")")
         let responseBody = responseBodies.removeValue(forKey: task.taskIdentifier)
         let envelope = responseBody.flatMap { try? JSONDecoder().decode(UploadResponse.self, from: $0) }
         guard error == nil,
