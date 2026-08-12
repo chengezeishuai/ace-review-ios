@@ -7,6 +7,8 @@ struct TaskListView: View {
     @State private var filter = TaskFilter.all
     @State private var selectedTask: TaskItem?
     @State private var pendingDelete: TaskItem?
+    @State private var deletingTaskIDs: Set<String> = []
+    @State private var deleteToast = ""
     @State private var searchText = ""
     @AppStorage("ace.settings.compactLibrary") private var compactLibrary = false
 
@@ -40,19 +42,25 @@ struct TaskListView: View {
                     } else {
                         LazyVStack(spacing: 10) {
                             ForEach(visibleTasks) { task in
-                                Button { selectedTask = task } label: {
-                                    LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id), compact: compactLibrary)
-                                }
+                                HStack(spacing: 8) {
+                                    Button { selectedTask = task } label: {
+                                        LibraryTaskRow(task: task, localUpload: uploads.snapshot(for: task.id), compact: compactLibrary)
+                                    }
                                     .buttonStyle(.plain)
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button(role: .destructive) { pendingDelete = task } label: {
-                                            Label("删除", systemImage: "trash")
-                                        }
+                                    .frame(maxWidth: .infinity)
+                                    Button { pendingDelete = task } label: {
+                                        Image(systemName: deletingTaskIDs.contains(task.id) ? "hourglass" : "trash")
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundStyle(ACETheme.danger)
+                                            .frame(width: 42, height: 42)
+                                            .background(ACETheme.paper)
+                                            .clipShape(Circle())
+                                            .overlay { Circle().stroke(ACETheme.danger.opacity(0.18), lineWidth: 1) }
                                     }
-                                    .contextMenu {
-                                        if task.status == "failed" { Button("重新分析") { Task { await taskStore.retry(task) } } }
-                                        Button("删除记录", role: .destructive) { pendingDelete = task }
-                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(deletingTaskIDs.contains(task.id))
+                                }
+                                .transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.96).combined(with: .opacity)))
                             }
                         }
                     }
@@ -75,17 +83,35 @@ struct TaskListView: View {
             if task.isComplete { ReviewReportView(task: task) }
             else { TaskProgressView(task: task, store: taskStore) }
         }
-        .alert("删除任务？", isPresented: Binding(
-            get: { pendingDelete != nil },
-            set: { if !$0 { pendingDelete = nil } }
-        ), presenting: pendingDelete) { task in
-            Button("删除", role: .destructive) {
-                Task { await taskStore.delete(task) }
+        .sheet(item: $pendingDelete) { task in
+            DeleteTaskSheet(task: task) {
                 pendingDelete = nil
+                deletingTaskIDs.insert(task.id)
+                Task {
+                    let success = await taskStore.delete(task)
+                    withAnimation(.easeOut(duration: 0.25)) { deletingTaskIDs.remove(task.id) }
+                    if success {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) { }
+                        deleteToast = "已删除“\(task.title)”"
+                        try? await Task.sleep(for: .seconds(2.2))
+                        deleteToast = ""
+                    }
+                }
             }
-            Button("取消", role: .cancel) { pendingDelete = nil }
-        } message: { task in
-            Text("将删除“\(task.title)”及其上传视频、分析结果和报告，此操作不可撤销。")
+            .presentationDetents([.height(290)])
+            .presentationDragIndicator(.visible)
+        }
+        .overlay(alignment: .bottom) {
+            if !deleteToast.isEmpty {
+                Label(deleteToast, systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(ACETheme.onPrimary)
+                    .padding(.horizontal, 18).padding(.vertical, 13)
+                    .background(ACETheme.green, in: Capsule())
+                    .shadow(color: .black.opacity(0.16), radius: 14, y: 6)
+                    .padding(.bottom, 18)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
     }
 
@@ -494,6 +520,66 @@ private struct ReviewReportView: View {
             Spacer()
         }
         .padding(17).background(ACETheme.paper).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)).overlay { RoundedRectangle(cornerRadius: 16).stroke(ACETheme.line, lineWidth: 1) }
+    }
+}
+
+private struct DeleteTaskSheet: View {
+    let task: TaskItem
+    let onDelete: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: "trash.circle.fill")
+                    .font(.system(size: 36))
+                    .foregroundStyle(ACETheme.danger)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("删除这条复盘？").font(.title3.bold()).foregroundStyle(ACETheme.ink)
+                    Text(task.title).font(.subheadline).foregroundStyle(ACETheme.cardMuted).lineLimit(1)
+                }
+            }
+            Text("将同时移除视频、分析结果和报告，删除后无法恢复。")
+                .font(.footnote).foregroundStyle(ACETheme.cardMuted)
+            HStack(spacing: 10) {
+                Button("取消") { dismiss() }
+                    .buttonStyle(SecondaryButtonStyle())
+                Button {
+                    dismiss()
+                    onDelete()
+                } label: {
+                    Label("确认删除", systemImage: "trash.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(DestructiveButtonStyle())
+            }
+        }
+        .padding(22)
+        .background(ACETheme.cream)
+    }
+}
+
+private struct DestructiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.vertical, 13)
+            .background(Color.red.opacity(configuration.isPressed ? 0.72 : 0.9), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+    }
+}
+
+private struct SecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(ACETheme.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(ACETheme.paper, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(ACETheme.cardLine, lineWidth: 1) }
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 

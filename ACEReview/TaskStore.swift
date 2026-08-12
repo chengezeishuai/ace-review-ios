@@ -78,15 +78,18 @@ final class TaskStore: ObservableObject {
         }
     }
 
-    func delete(_ task: TaskItem) async {
-        guard !workingTaskIDs.contains(task.id) else { return }
+    @discardableResult
+    func delete(_ task: TaskItem) async -> Bool {
+        guard !workingTaskIDs.contains(task.id) else { return false }
         workingTaskIDs.insert(task.id)
         defer { workingTaskIDs.remove(task.id) }
         do {
             try await APIClient.shared.deleteTask(id: task.id)
             tasks.removeAll { $0.id == task.id }
+            return true
         } catch {
             loadState = .failed(error.localizedDescription)
+            return false
         }
     }
 
