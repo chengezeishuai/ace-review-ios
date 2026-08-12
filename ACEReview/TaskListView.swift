@@ -48,16 +48,17 @@ struct TaskListView: View {
                                     }
                                     .buttonStyle(.plain)
                                     .frame(maxWidth: .infinity)
-                                    Button { pendingDelete = task } label: {
-                                        Image(systemName: deletingTaskIDs.contains(task.id) ? "hourglass" : "trash")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(ACETheme.danger)
-                                            .frame(width: 42, height: 42)
-                                            .background(ACETheme.paper)
-                                            .clipShape(Circle())
-                                            .overlay { Circle().stroke(ACETheme.danger.opacity(0.18), lineWidth: 1) }
+                                    Menu {
+                                        if task.status == "failed" {
+                                            Button("重新分析") { Task { await taskStore.retry(task) } }
+                                        }
+                                        Button("删除任务", role: .destructive) { pendingDelete = task }
+                                    } label: {
+                                        Image(systemName: "ellipsis")
+                                            .font(.system(size: 15, weight: .bold))
+                                            .foregroundStyle(ACETheme.cardMuted)
+                                            .frame(width: 34, height: 42)
                                     }
-                                    .buttonStyle(.plain)
                                     .disabled(deletingTaskIDs.contains(task.id))
                                 }
                                 .transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.96).combined(with: .opacity)))

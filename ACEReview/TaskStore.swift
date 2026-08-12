@@ -83,11 +83,15 @@ final class TaskStore: ObservableObject {
         guard !workingTaskIDs.contains(task.id) else { return false }
         workingTaskIDs.insert(task.id)
         defer { workingTaskIDs.remove(task.id) }
+        let oldIndex = tasks.firstIndex { $0.id == task.id }
+        tasks.removeAll { $0.id == task.id }
         do {
             try await APIClient.shared.deleteTask(id: task.id)
-            tasks.removeAll { $0.id == task.id }
             return true
         } catch {
+            if let oldIndex, !tasks.contains(where: { $0.id == task.id }) {
+                tasks.insert(task, at: min(oldIndex, tasks.count))
+            }
             loadState = .failed(error.localizedDescription)
             return false
         }
