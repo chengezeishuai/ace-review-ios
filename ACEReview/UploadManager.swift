@@ -171,8 +171,14 @@ private final class UploadSlot: NSObject, ObservableObject {
     // background session for transfers that continue after suspension.
     private lazy var foregroundSession: URLSession = {
         let configuration = URLSessionConfiguration.default
-        configuration.waitsForConnectivity = true
+        // Do not leave a foreground part suspended behind the connectivity
+        // waiter. The upload screen must either send immediately or surface a
+        // concrete network error so the retry path can run.
+        configuration.waitsForConnectivity = false
         configuration.allowsCellularAccess = true
+        configuration.timeoutIntervalForRequest = 300
+        configuration.timeoutIntervalForResource = 900
+        configuration.networkServiceType = .responsiveData
         configuration.httpMaximumConnectionsPerHost = 6
         return URLSession(
             configuration: configuration,
@@ -756,6 +762,10 @@ private final class UploadSlot: NSObject, ObservableObject {
         }
         attachAuthorization(to: &request)
         let task = uploadSession.uploadTask(with: request, fromFile: fileURL)
+        task.priority = URLSessionTask.highPriority
+        if let size = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size]) as? NSNumber {
+            task.countOfBytesClientExpectsToSend = size.int64Value
+        }
         task.taskDescription = "part|\(taskID)|\(index)|\(fileURL.path)"
         task.resume()
     }
