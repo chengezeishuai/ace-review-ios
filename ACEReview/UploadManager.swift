@@ -141,7 +141,7 @@ private final class UploadSlot: NSObject, ObservableObject {
             from: Date(), dateStyle: .none, timeStyle: .medium
         )
         publish {
-            self.snapshot.diagnostics.append("\(stamp)  (message)")
+            self.snapshot.diagnostics.append("\(stamp)  \(message)")
             if self.snapshot.diagnostics.count > 40 {
                 self.snapshot.diagnostics.removeFirst(self.snapshot.diagnostics.count - 40)
             }
@@ -345,6 +345,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                     self.activeTaskID = response.task.id
                     onTaskCreated(response.task.id)
                 }
+                self.diagnostic("任务已创建 taskID=\(response.task.id), partSize=\(response.partSize)")
                 self.startReadingWhenAvailable(
                     asset: asset,
                     resource: resource,
@@ -584,7 +585,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                 if self.snapshot.isShowingPreparation {
                     self.snapshot.message = resourcePercent < 1
                         ? "正在从照片读取原视频（可能需要从 iCloud 下载）"
-                        : "正在读取原视频 (resourcePercent)%"
+                        : "正在读取原视频 \(resourcePercent)%"
                 } else {
                     self.snapshot.message = Self.uploadMessage
                 }
@@ -642,6 +643,7 @@ private final class UploadSlot: NSObject, ObservableObject {
                 }
             }
         )
+        diagnostic("已启动 Photos 资源读取")
     }
 
     private func resumeInterruptedImport(_ manifest: UploadManifest) {
