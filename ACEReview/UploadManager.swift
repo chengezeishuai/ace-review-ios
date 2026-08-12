@@ -164,6 +164,29 @@ private final class UploadSlot: NSObject, ObservableObject {
         return session
     }()
 
+    // A foreground session starts ready-made part files immediately. Background
+    // sessions are intentionally conservative and may wait for the system's
+    // scheduling window, which made a visible upload appear frozen while the
+    // app was open. We use this session while the app is active and retain the
+    // background session for transfers that continue after suspension.
+    private lazy var foregroundSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.waitsForConnectivity = true
+        configuration.allowsCellularAccess = true
+        configuration.httpMaximumConnectionsPerHost = 6
+        return URLSession(
+            configuration: configuration,
+            delegate: self,
+            delegateQueue: delegateQueue
+        )
+    }()
+
+    private var uploadSession: URLSession {
+        UIApplication.shared.applicationState == .active
+            ? foregroundSession
+            : backgroundSession
+    }
+
     init(slotIndex: Int) {
         self.slotIndex = slotIndex
         self.backgroundIdentifier = switch slotIndex {
@@ -732,7 +755,7 @@ private final class UploadSlot: NSObject, ObservableObject {
             request.setValue(size.stringValue, forHTTPHeaderField: "Content-Length")
         }
         attachAuthorization(to: &request)
-        let task = backgroundSession.uploadTask(with: request, fromFile: fileURL)
+        let task = uploadSession.uploadTask(with: request, fromFile: fileURL)
         task.taskDescription = "part|\(taskID)|\(index)|\(fileURL.path)"
         task.resume()
     }
@@ -780,7 +803,7 @@ private final class UploadSlot: NSObject, ObservableObject {
             }
             request.setValue(manifest.uploadToken, forHTTPHeaderField: "X-ACE-Upload-Token")
             attachAuthorization(to: &request)
-            let task = backgroundSession.uploadTask(with: request, fromFile: bodyURL)
+            let task = uploadSession.uploadTask(with: request, fromFile: bodyURL)
             task.taskDescription = "finalize|\(manifest.taskID)|-1|\(bodyURL.path)"
             publish {
                 self.snapshot.phase = .finalizing
