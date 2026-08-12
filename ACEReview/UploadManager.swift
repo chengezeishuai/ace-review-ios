@@ -788,7 +788,8 @@ private final class UploadSlot: NSObject, ObservableObject {
             task.countOfBytesClientExpectsToSend = size.int64Value
         }
         task.taskDescription = "part|\(taskID)|\(index)|\(fileURL.path)"
-        diagnostic("已创建上传任务 index=\(index), session=\(task.session.configuration.identifier ?? \"foreground\"), state=\(task.state.rawValue)")
+        let sessionName = task.session?.configuration.identifier ?? "foreground"
+        diagnostic("已创建上传任务 index=\(index), session=\(sessionName), state=\(task.state.rawValue)")
         task.resume()
         diagnostic("已调用 resume index=\(index), state=\(task.state.rawValue)")
     }
@@ -1042,7 +1043,8 @@ extension UploadSlot: URLSessionTaskDelegate, URLSessionDataDelegate {
         let kind = fields[0]
         let taskID = fields[1]
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
-        diagnostic("上传任务结束 kind=\(kind), index=\(fields[2]), http=\(status), error=\(error?.localizedDescription ?? \"none\")")
+        let errorText = error?.localizedDescription ?? "none"
+        diagnostic("上传任务结束 kind=\(kind), index=\(fields[2]), http=\(status), error=\(errorText)")
         let responseBody = responseBodies.removeValue(forKey: task.taskIdentifier)
         let envelope = responseBody.flatMap { try? JSONDecoder().decode(UploadResponse.self, from: $0) }
         guard error == nil,
